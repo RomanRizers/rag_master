@@ -1,0 +1,14 @@
+venv/
+*.pyc
+__pycache__/
+*.log
+logs/
+.env
+*.sqlite3
+*.db
+.DS_Store
+.vscode/
+.idea/
+
+vector_e5-base-en-ru.json
+

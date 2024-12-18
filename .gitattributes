@@ -1,0 +1,3 @@
+qdrant_collections/** binary
+README.md text eol=lf
+app/embeddings/dataset/gazprom_dataset.json text eol=lf

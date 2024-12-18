@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Поисковая строка</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="language">
+        <a href="#" onclick="setLanguage('en')" id="lang-en">En</a>
+        <a href="#" onclick="setLanguage('ru')" id="lang-ru">Ru</a>
+    </div>
+    <div class="container">
+        <h1 data-translate="title">Сервис поиска параграфов</h1>
+        <div class="form-group">
+            <input type="text" id="query" data-translate-query="query" placeholder="Введите запрос">
+            <input type="number" id="top_k" placeholder="5" min="1" value="5">
+        </div>
+        <div class="tooltip" id="tooltipTopK" data-translate="tooltip">Введите количество результатов для вывода, по умолчанию 5.</div>
+        <button id="searchButton"  data-translate="button">Искать</button>
+        <div class="results" id="results"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
