@@ -47,7 +47,7 @@ docker-compose up --build
   - Создайте виртуальное окружение и активируйте его:
     ```bash
     python -m venv venv
-    source venv/bin/activate
+    source venv/Scripts/activate
     ```
   - Установите зависимости:
     ```bash
