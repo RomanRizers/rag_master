@@ -62,11 +62,12 @@ class IngestionService:
         logger.info("index_job_started", job_id=job_id, document_id=document_id)
         try:
             document = self.document_service.get_document(document_id)
+            document_bytes = self.document_service.read_content(document_id)
 
             blocks = parse_document(
                 file_name=document.file_name,
                 mime_type=document.mime_type,
-                content=document.content_bytes,
+                content=document_bytes,
             )
             self._update_job(job_id, progress=40)
 

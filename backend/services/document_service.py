@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from threading import RLock
 from uuid import uuid4
 
 from backend.core.exceptions import DocumentError
+from backend.infrastructure.storage import StorageAdapter, create_storage_adapter
 
 
 @dataclass
@@ -18,7 +20,7 @@ class StoredDocument:
     source_name: str | None
     tags: list[str]
     created_at: str
-    content_bytes: bytes
+    object_key: str
 
     def public_dict(self) -> dict:
         return {
@@ -34,7 +36,8 @@ class StoredDocument:
 
 
 class DocumentService:
-    def __init__(self):
+    def __init__(self, storage: StorageAdapter | None = None):
+        self.storage = storage or create_storage_adapter()
         self._documents: dict[str, StoredDocument] = {}
         self._lock = RLock()
 
@@ -47,6 +50,8 @@ class DocumentService:
         tags: list[str] | None = None,
     ) -> dict:
         document_id = str(uuid4())
+        object_key = f"{document_id}/{_safe_file_name(file_name)}"
+        self.storage.save(object_key, content_bytes)
         record = StoredDocument(
             document_id=document_id,
             file_name=file_name,
@@ -56,7 +61,7 @@ class DocumentService:
             source_name=source_name.strip() if isinstance(source_name, str) and source_name.strip() else None,
             tags=[tag.strip() for tag in (tags or []) if isinstance(tag, str) and tag.strip()],
             created_at=_now_iso(),
-            content_bytes=content_bytes,
+            object_key=object_key,
         )
         with self._lock:
             self._documents[document_id] = record
@@ -90,6 +95,15 @@ class DocumentService:
                 )
             record.status = status
 
+    def read_content(self, document_id: str) -> bytes:
+        record = self.get_document(document_id)
+        return self.storage.read(record.object_key)
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _safe_file_name(file_name: str) -> str:
+    name = Path(file_name or "document.bin").name.strip()
+    return name or "document.bin"
