@@ -63,7 +63,7 @@ class QdrantService:
             for hit in search_result
         ]
 
-    def index_document(self, document_name, content_vector, content, keywords, dataframe=None):
+    def index_document(self, document_name, content_vector, content, keywords, dataframe=None, metadata=None):
         """Индексирует документ в коллекции Qdrant."""
         document_id = str(uuid.uuid4())
         logger.info(
@@ -77,15 +77,19 @@ class QdrantService:
         if keywords:
             keywords = [kw.lower() for kw in keywords]
 
+        payload = {
+            "document_name": document_name,
+            "content": content,
+            "keywords": keywords,
+            "dataframe": dataframe
+        }
+        if isinstance(metadata, dict):
+            payload.update(metadata)
+
         point = PointStruct(
             id=document_id,
             vector=content_vector.tolist(),
-            payload={
-                "document_name": document_name,
-                "content": content,
-                "keywords": keywords,
-                "dataframe": dataframe
-            }
+            payload=payload
         )
 
         try:

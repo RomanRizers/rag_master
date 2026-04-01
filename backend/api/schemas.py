@@ -42,6 +42,7 @@ class IndexDocument(BaseModel):
     content: str
     dataframe: str | None = None
     keywords: list[str] = Field(default_factory=list)
+    metadata: dict | None = None
 
     @field_validator("content", mode="before")
     @classmethod
@@ -73,6 +74,15 @@ class IndexDocument(BaseModel):
                 raise ValueError("'keywords' must be a list of non-empty strings")
             normalized.append(keyword.strip())
         return normalized
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def validate_metadata(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError("'metadata' must be an object when provided")
+        return value
 
 
 class IndexingRequest(BaseModel):
