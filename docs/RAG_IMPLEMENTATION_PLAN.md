@@ -332,6 +332,10 @@
 | done | 2026-04-02 | Базовый `ChatService` + chat-схемы API | `30a0684` |
 | done | 2026-04-02 | Первые chat endpoints (`create/send/history`) | `a3a5d5a` |
 | done | 2026-04-02 | README: chat endpoints + LLM env | `3eff399` |
+| done | 2026-04-02 | Progress tracker и commit changelog в master-плане | `1f1e5ea` |
+| done | 2026-04-02 | LLM config + `LLMError` для реализации (`openrouter|local`) | `11d060f` |
+| done | 2026-04-02 | Реализация провайдера LLM и фабрики выбора | `9b5babd` |
+| done | 2026-04-02 | Retrieval-контекст и citations в chat-ответах | `280a810` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
