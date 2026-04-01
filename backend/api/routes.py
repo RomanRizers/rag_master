@@ -84,6 +84,8 @@ async def send_chat_message(payload: ChatMessageRequest, session_id: str):
         get_chat_service().send_message,
         session_id,
         payload.message,
+        payload.top_k,
+        payload.keywords,
     )
     response = ChatSendMessageResponse(
         session_id=session_id,

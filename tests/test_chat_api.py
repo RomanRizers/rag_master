@@ -12,11 +12,27 @@ class _FakeLLMProvider:
         return "assistant reply"
 
 
+def _fake_retriever(query, top_k, keywords):
+    return {
+        "results": [
+            {
+                "id": "chunk-1",
+                "payload": {
+                    "document_name": "TestDoc.pdf",
+                    "page": 3,
+                    "content": "Это релевантный фрагмент для ответа ассистента.",
+                },
+            }
+        ],
+        "total": 1,
+    }
+
+
 class ChatApiTestCase(unittest.TestCase):
     def setUp(self):
         app = create_app()
         self.client = TestClient(app)
-        self.chat_service = ChatService(llm_provider=_FakeLLMProvider())
+        self.chat_service = ChatService(llm_provider=_FakeLLMProvider(), retriever=_fake_retriever)
 
     @patch("backend.api.routes.get_chat_service")
     def test_create_session_send_message_and_read_history(self, get_chat_service_mock):
@@ -33,6 +49,8 @@ class ChatApiTestCase(unittest.TestCase):
         self.assertEqual(send_response.status_code, 200)
         payload = send_response.json()
         self.assertEqual(payload["assistant_message"]["content"], "assistant reply")
+        self.assertEqual(len(payload["assistant_message"]["citations"]), 1)
+        self.assertEqual(payload["assistant_message"]["citations"][0]["document_name"], "TestDoc.pdf")
 
         history_response = self.client.get(f"/api/chat/sessions/{session_id}/messages")
         self.assertEqual(history_response.status_code, 200)
