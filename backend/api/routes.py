@@ -1,5 +1,7 @@
+import json
+
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from backend.api.dependencies import ensure_json_content_type
@@ -93,3 +95,36 @@ async def send_chat_message(payload: ChatMessageRequest, session_id: str):
         assistant_message=assistant_message,
     )
     return JSONResponse(content=response.model_dump())
+
+
+@api_router.post("/api/chat/sessions/{session_id}/messages/stream")
+async def stream_chat_message(payload: ChatMessageRequest, session_id: str):
+    user_message, assistant_message = await run_in_threadpool(
+        get_chat_service().send_message,
+        session_id,
+        payload.message,
+        payload.top_k,
+        payload.keywords,
+    )
+
+    def event_stream():
+        content = assistant_message["content"] or ""
+        chunk_size = 32
+        for index in range(0, len(content), chunk_size):
+            chunk = content[index : index + chunk_size]
+            yield _sse_event("delta", {"text": chunk})
+        yield _sse_event("citations", {"items": assistant_message.get("citations", [])})
+        yield _sse_event(
+            "done",
+            {
+                "session_id": session_id,
+                "user_message_id": user_message["id"],
+                "assistant_message_id": assistant_message["id"],
+            },
+        )
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+def _sse_event(event_name: str, payload: dict) -> str:
+    return f"event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
