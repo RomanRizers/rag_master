@@ -88,6 +88,15 @@ LOCAL_LLM_MODEL=...
 LOCAL_LLM_API_KEY=
 ```
 
+## Storage backend
+
+```bash
+STORAGE_BACKEND=local
+DOCUMENTS_STORAGE_PATH=/tmp/rag_documents
+```
+
+Сейчас реализован локальный файловый adapter (подготовка к S3/MinIO adapter на следующем этапе).
+
 ## Parser зависимости
 
 - `python-multipart` уже включен и нужен для `multipart/form-data` upload.

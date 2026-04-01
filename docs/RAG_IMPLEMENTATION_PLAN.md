@@ -346,6 +346,8 @@
 | done | 2026-04-02 | README + tracker update по ingestion этапам | `2f5ec68` |
 | done | 2026-04-02 | Unit-тесты parser/chunker | `8e777f6` |
 | done | 2026-04-02 | Go integration-тесты ingestion API | `e52fdbf` |
+| done | 2026-04-02 | Local storage adapter и перевод ingestion на хранение файлов | `e95e95b` |
+| done | 2026-04-02 | Unit-тесты локального storage adapter | `e262bc6` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
