@@ -27,7 +27,8 @@ document.getElementById('searchButton').addEventListener('click', async () => {
                 resultDiv.className = 'result';
 
                 const payload = result.payload || {};
-                appendResultLine(resultDiv, 'Score', String(result.score ?? 'N/A'));
+                appendResultLine(resultDiv, 'Релевантность', formatRelevance(result.score));
+                appendResultLine(resultDiv, 'Score (raw)', formatRawScore(result.score));
                 appendResultLine(resultDiv, 'Контент', payload.content || 'No content available');
                 appendResultLine(
                     resultDiv,
@@ -64,6 +65,31 @@ function appendResultLine(container, label, value) {
     paragraph.appendChild(strong);
     paragraph.appendChild(document.createTextNode(` ${value}`));
     container.appendChild(paragraph);
+}
+
+function formatRelevance(score) {
+    const numericScore = Number(score);
+    if (!Number.isFinite(numericScore)) {
+        return 'N/A';
+    }
+
+    let normalized;
+    if (numericScore >= -1 && numericScore <= 1) {
+        normalized = (numericScore + 1) / 2;
+    } else {
+        normalized = numericScore / 100;
+    }
+
+    const percent = Math.max(0, Math.min(100, normalized * 100));
+    return `${percent.toFixed(1)}%`;
+}
+
+function formatRawScore(score) {
+    const numericScore = Number(score);
+    if (!Number.isFinite(numericScore)) {
+        return 'N/A';
+    }
+    return numericScore.toFixed(6);
 }
 
 const tooltip = document.getElementById('tooltipTopK');
