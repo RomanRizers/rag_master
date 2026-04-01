@@ -81,6 +81,12 @@ class IngestionService:
                     "content": chunk["content"],
                     "dataframe": None,
                     "keywords": [],
+                    "metadata": {
+                        "document_id": document_id,
+                        "chunk_index": chunk.get("chunk_index"),
+                        "page": chunk.get("page"),
+                        "section": chunk.get("section"),
+                    },
                 }
                 for chunk in chunks
             ]

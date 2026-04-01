@@ -53,6 +53,7 @@ class ApiService:
             content = document.get('content')
             keywords = document.get('keywords', [])
             dataframe = document.get('dataframe', None)
+            metadata = document.get('metadata', None)
             keywords = [kw.lower() for kw in keywords]
 
             try:
@@ -71,7 +72,8 @@ class ApiService:
                     content_vector=content_vector,
                     content=content,
                     keywords=keywords,
-                    dataframe=dataframe
+                    dataframe=dataframe,
+                    metadata=metadata,
                 )
             except StorageError:
                 raise
