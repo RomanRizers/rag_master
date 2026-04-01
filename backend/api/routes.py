@@ -21,6 +21,7 @@ from backend.core.exceptions import ValidationError
 from backend.services.api_service import ApiService
 from backend.services.chat_service import ChatService
 from backend.services.document_service import DocumentService
+from backend.services.health_service import HealthService
 from backend.services.ingestion_service import IngestionService
 
 api_router = APIRouter()
@@ -28,6 +29,7 @@ api_service = None
 chat_service = None
 document_service = None
 ingestion_service = None
+health_service = None
 
 
 def get_api_service():
@@ -61,10 +63,30 @@ def get_ingestion_service():
     return ingestion_service
 
 
+def get_health_service():
+    global health_service
+    if health_service is None:
+        health_service = HealthService()
+    return health_service
+
+
 @api_router.get("/")
 def index():
     """Health endpoint for backend service."""
     return JSONResponse(content={"status": "ok", "service": "fastapi-backend"})
+
+
+@api_router.get("/health/live")
+async def health_live():
+    payload = await run_in_threadpool(get_health_service().live)
+    return JSONResponse(content=payload)
+
+
+@api_router.get("/health/ready")
+async def health_ready():
+    payload, ready = await run_in_threadpool(get_health_service().ready)
+    status_code = 200 if ready else 503
+    return JSONResponse(content=payload, status_code=status_code)
 
 
 @api_router.post("/api/searching")
