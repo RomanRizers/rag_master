@@ -1,4 +1,7 @@
+import type { FormEvent } from "react";
+
 import type { Language } from "../i18n";
+import type { ThemeMode } from "../theme";
 
 type SearchToolbarCopy = {
   title: string;
@@ -7,6 +10,10 @@ type SearchToolbarCopy = {
   topKLabel: string;
   topKHint: string;
   searchButton: string;
+  themeLabel: string;
+  themeLight: string;
+  themeDark: string;
+  themeSystem: string;
 };
 
 type SearchToolbarProps = {
@@ -17,6 +24,8 @@ type SearchToolbarProps = {
   topK: number;
   onTopKChange: (value: number) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  themeMode: ThemeMode;
+  onThemeModeChange: (nextMode: ThemeMode) => void;
   loading: boolean;
   text: SearchToolbarCopy;
 };
@@ -29,13 +38,24 @@ export function SearchToolbar({
   topK,
   onTopKChange,
   onSubmit,
+  themeMode,
+  onThemeModeChange,
   loading,
   text
 }: SearchToolbarProps) {
   return (
     <header className="hero">
       <div className="hero-top">
-        <div className="lang-switch" role="group" aria-label="Language switch">
+        <div className="switches">
+          <label className="theme-switch">
+            <span>{text.themeLabel}</span>
+            <select value={themeMode} onChange={(event) => onThemeModeChange(event.target.value as ThemeMode)}>
+              <option value="light">{text.themeLight}</option>
+              <option value="dark">{text.themeDark}</option>
+              <option value="system">{text.themeSystem}</option>
+            </select>
+          </label>
+          <div className="lang-switch" role="group" aria-label="Language switch">
           <button
             type="button"
             className={language === "ru" ? "lang-btn active" : "lang-btn"}
@@ -50,6 +70,7 @@ export function SearchToolbar({
           >
             EN
           </button>
+          </div>
         </div>
       </div>
 
@@ -89,4 +110,3 @@ export function SearchToolbar({
     </header>
   );
 }
-import type { FormEvent } from "react";
