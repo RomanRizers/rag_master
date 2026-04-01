@@ -1,15 +1,16 @@
 import unittest
 from unittest.mock import patch
 
-from app.app import create_app
-from app.exceptions import VectorizationError, StorageError
+from fastapi.testclient import TestClient
+
+from app.exceptions import StorageError, VectorizationError
+from app.main import create_app
 
 
 class ApiErrorHandlingTestCase(unittest.TestCase):
     def setUp(self):
         app = create_app()
-        app.config["TESTING"] = True
-        self.client = app.test_client()
+        self.client = TestClient(app)
 
     @patch("app.api.get_api_service")
     def test_maps_vectorization_error(self, get_api_service_mock):
@@ -19,7 +20,7 @@ class ApiErrorHandlingTestCase(unittest.TestCase):
         response = self.client.post("/searching", json={"query": "hello"})
 
         self.assertEqual(response.status_code, 503)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["code"], "vectorization_error")
 
     @patch("app.api.get_api_service")
@@ -30,7 +31,7 @@ class ApiErrorHandlingTestCase(unittest.TestCase):
         response = self.client.post("/searching", json={"query": "hello"})
 
         self.assertEqual(response.status_code, 503)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["code"], "storage_error")
 
     @patch("app.api.get_api_service")
@@ -41,7 +42,7 @@ class ApiErrorHandlingTestCase(unittest.TestCase):
         response = self.client.post("/searching", json={"query": "hello"})
 
         self.assertEqual(response.status_code, 500)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["code"], "internal_error")
         self.assertEqual(payload["error"]["details"]["type"], "RuntimeError")
 

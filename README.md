@@ -4,7 +4,7 @@
 
 ## Стек технологий
 
-- **Backend**: Python, Flask
+- **Backend**: Python, FastAPI
 - **Vector DB**: Qdrant
 - **Frontend**: HTML, CSS, JavaScript
 - **Model**: E5 (e5-base-en-ru)
@@ -35,7 +35,7 @@ pip install uv
 
 ```bash
 uv sync
-uv run flask --app app.app:create_app run --host=0.0.0.0 --port=5000
+uv run uvicorn app.main:app --host 0.0.0.0 --port 5000
 ```
 
 После запуска сервис доступен по адресу `http://localhost:5000`.

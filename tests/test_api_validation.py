@@ -1,48 +1,49 @@
 import unittest
 from unittest.mock import patch
 
-from app.app import create_app
+from fastapi.testclient import TestClient
+
+from app.main import create_app
 
 
 class ApiValidationTestCase(unittest.TestCase):
     def setUp(self):
         app = create_app()
-        app.config["TESTING"] = True
-        self.client = app.test_client()
+        self.client = TestClient(app)
 
     def test_search_rejects_non_json_content_type(self):
-        response = self.client.post("/searching", data='{"query":"hello"}', content_type="text/plain")
+        response = self.client.post("/searching", data='{"query":"hello"}', headers={"content-type": "text/plain"})
 
         self.assertEqual(response.status_code, 415)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["code"], "invalid_content_type")
 
     def test_search_rejects_invalid_json(self):
-        response = self.client.post("/searching", data='{"query":', content_type="application/json")
+        response = self.client.post("/searching", data='{"query":', headers={"content-type": "application/json"})
 
         self.assertEqual(response.status_code, 400)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["code"], "invalid_json")
 
     def test_search_requires_query(self):
         response = self.client.post("/searching", json={"top_k": 3})
 
         self.assertEqual(response.status_code, 400)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["message"], "Query is required")
 
     def test_search_validates_top_k_range(self):
         response = self.client.post("/searching", json={"query": "hello", "top_k": 0})
 
         self.assertEqual(response.status_code, 400)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["code"], "invalid_field")
 
     def test_search_validates_keywords_type(self):
         response = self.client.post("/searching", json={"query": "hello", "keywords": "tag"})
 
         self.assertEqual(response.status_code, 400)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["code"], "invalid_field")
 
     @patch("app.api.get_api_service")
@@ -53,7 +54,7 @@ class ApiValidationTestCase(unittest.TestCase):
         response = self.client.post("/searching", json={"query": "hello", "top_k": 3, "keywords": ["A"]})
 
         self.assertEqual(response.status_code, 200)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["total"], 1)
         service.search_query.assert_called_once_with("hello", 3, ["A"])
 
@@ -61,14 +62,14 @@ class ApiValidationTestCase(unittest.TestCase):
         response = self.client.post("/indexing", json={"documents": [{"content": "x"}]})
 
         self.assertEqual(response.status_code, 400)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["message"], "No document name provided")
 
     def test_indexing_requires_documents(self):
         response = self.client.post("/indexing", json={"document_name": "doc", "documents": []})
 
         self.assertEqual(response.status_code, 400)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["message"], "No documents to index")
 
     def test_indexing_validates_document_content(self):
@@ -78,7 +79,7 @@ class ApiValidationTestCase(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["error"]["code"], "invalid_field")
 
     @patch("app.api.get_api_service")
@@ -95,7 +96,7 @@ class ApiValidationTestCase(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        payload = response.get_json()
+        payload = response.json()
         self.assertEqual(payload["status"], "success")
         service.index_documents.assert_called_once_with(
             "doc",
