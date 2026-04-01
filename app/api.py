@@ -1,10 +1,19 @@
 from flask import request, jsonify, render_template
 from app.services.api_service import ApiService
 from flask import Blueprint
+from app.config import Config
+from app.validation import parse_json_body, validate_search_request, validate_indexing_request
 
 api_bp = Blueprint('api', __name__)
 
-api_service = ApiService()
+api_service = None
+
+
+def get_api_service():
+    global api_service
+    if api_service is None:
+        api_service = ApiService()
+    return api_service
 
 @api_bp.route('/', methods=['GET'])
 def index():
@@ -14,32 +23,22 @@ def index():
 @api_bp.route('/searching', methods=['POST'])
 def search():
     """Обрабатывает запрос поиска."""
-    data = request.get_json()
+    data = parse_json_body(request)
+    query, top_k, keywords = validate_search_request(
+        data,
+        top_k_default=Config.TOP_K_DEFAULT,
+        top_k_max=Config.TOP_K_MAX,
+    )
 
-    query = data.get("query")
-    top_k = data.get("top_k", 5)
-    keywords = data.get("keywords")
-
-    if not query:
-        return jsonify({"error": "Query is required"}), 400
-
-    results = api_service.search_query(query, top_k, keywords)
+    results = get_api_service().search_query(query, top_k, keywords)
     return jsonify(results)
 
 
 @api_bp.route('/indexing', methods=['POST'])
 def indexing():
     """Обрабатывает запрос на индексацию документов."""
-    data = request.get_json()
+    data = parse_json_body(request)
+    document_name, documents = validate_indexing_request(data)
 
-    document_name = data.get("document_name")
-    if not document_name:
-        return jsonify({"error": "No document name provided"}), 400
-
-    documents = data.get("documents")
-    if not documents:
-        return jsonify({"error": "No documents to index"}), 400
-
-    result = api_service.index_documents(document_name, documents)
+    result = get_api_service().index_documents(document_name, documents)
     return jsonify(result)
-
