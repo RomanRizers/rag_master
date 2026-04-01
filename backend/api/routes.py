@@ -15,6 +15,7 @@ from backend.api.schemas import (
     DocumentUploadResponse,
     IndexingRequest,
     JobStatusResponse,
+    JobListResponse,
     SearchRequest,
 )
 from backend.core.exceptions import ValidationError
@@ -154,6 +155,13 @@ async def index_document(document_id: str):
 async def get_job_status(job_id: str):
     job = await run_in_threadpool(get_ingestion_service().get_job, job_id)
     response = JobStatusResponse.model_validate(job)
+    return JSONResponse(content=response.model_dump())
+
+
+@api_router.get("/api/jobs")
+async def list_jobs(status: str | None = None, document_id: str | None = None):
+    jobs = await run_in_threadpool(get_ingestion_service().list_jobs, status, document_id)
+    response = JobListResponse(jobs=[JobStatusResponse.model_validate(item) for item in jobs])
     return JSONResponse(content=response.model_dump())
 
 

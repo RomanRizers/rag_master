@@ -28,6 +28,14 @@ class _FakeIngestionService:
     def get_job(self, job_id: str):
         return self.jobs[job_id]
 
+    def list_jobs(self, status: str | None = None, document_id: str | None = None):
+        items = list(self.jobs.values())
+        if status:
+            items = [item for item in items if item.get("status") == status]
+        if document_id:
+            items = [item for item in items if item.get("document_id") == document_id]
+        return items
+
 
 class DocumentIngestionApiTestCase(unittest.TestCase):
     def setUp(self):
@@ -77,6 +85,29 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
         job_response = self.client.get("/api/jobs/job-1")
         self.assertEqual(job_response.status_code, 200)
         self.assertEqual(job_response.json()["status"], "queued")
+
+    @patch("backend.api.routes.get_document_service")
+    @patch("backend.api.routes.get_ingestion_service")
+    def test_list_jobs_supports_filters(self, get_ingestion_service_mock, get_document_service_mock):
+        get_document_service_mock.return_value = self.document_service
+        get_ingestion_service_mock.return_value = self.ingestion_service
+
+        upload_response = self.client.post(
+            "/api/documents/upload",
+            files={"file": ("sample.txt", b"hello world", "text/plain")},
+        )
+        document_id = upload_response.json()["document_id"]
+        self.client.post(f"/api/documents/{document_id}/index")
+
+        list_response = self.client.get("/api/jobs")
+        self.assertEqual(list_response.status_code, 200)
+        jobs = list_response.json()["jobs"]
+        self.assertEqual(len(jobs), 1)
+
+        filtered = self.client.get("/api/jobs", params={"status": "queued", "document_id": document_id})
+        self.assertEqual(filtered.status_code, 200)
+        filtered_jobs = filtered.json()["jobs"]
+        self.assertEqual(len(filtered_jobs), 1)
 
     def test_upload_empty_file_returns_400(self):
         response = self.client.post(

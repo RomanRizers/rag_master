@@ -59,6 +59,16 @@ class IngestionService:
                 )
             return dict(job)
 
+    def list_jobs(self, status: str | None = None, document_id: str | None = None) -> list[dict]:
+        with self._lock:
+            jobs = [dict(item) for item in self._jobs.values()]
+        if status:
+            jobs = [item for item in jobs if item.get("status") == status]
+        if document_id:
+            jobs = [item for item in jobs if item.get("document_id") == document_id]
+        jobs.sort(key=lambda item: item.get("started_at") or "", reverse=True)
+        return jobs
+
     def _run_job(self, job_id: str):
         job = self._update_job(job_id, status="running", progress=5, started_at=_now_iso())
         document_id = job["document_id"]

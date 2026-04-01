@@ -36,6 +36,10 @@ type jobStatusResponse struct {
 	Progress   int    `json:"progress"`
 }
 
+type jobListResponse struct {
+	Jobs []jobStatusResponse `json:"jobs"`
+}
+
 func postMultipartDocument(t *testing.T, path string, filename string, content []byte) *http.Response {
 	t.Helper()
 
@@ -145,6 +149,37 @@ func TestStartIndexAndGetJobStatusEndpoints(t *testing.T) {
 func TestGetMissingJobReturnsNotFound(t *testing.T) {
 	resp := doRequest(t, http.MethodGet, "/api/jobs/missing-job-id", nil, "")
 	assertErrorCode(t, resp, http.StatusNotFound, "job_not_found")
+}
+
+func TestListJobsEndpoint(t *testing.T) {
+	uploadResp := postMultipartDocument(t, "/api/documents/upload", "jobs-list.txt", []byte("job list check"))
+	if uploadResp.StatusCode != http.StatusCreated {
+		defer uploadResp.Body.Close()
+		t.Fatalf("unexpected upload status: got %d, want %d", uploadResp.StatusCode, http.StatusCreated)
+	}
+
+	var uploadPayload documentUploadResponse
+	decodeJSON(t, uploadResp, &uploadPayload)
+
+	indexPath := fmt.Sprintf("/api/documents/%s/index", uploadPayload.DocumentID)
+	indexResp := doRequest(t, http.MethodPost, indexPath, nil, "")
+	if indexResp.StatusCode != http.StatusAccepted {
+		defer indexResp.Body.Close()
+		t.Fatalf("unexpected index start status: got %d, want %d", indexResp.StatusCode, http.StatusAccepted)
+	}
+	indexResp.Body.Close()
+
+	listResp := doRequest(t, http.MethodGet, "/api/jobs", nil, "")
+	if listResp.StatusCode != http.StatusOK {
+		defer listResp.Body.Close()
+		t.Fatalf("unexpected jobs list status: got %d, want %d", listResp.StatusCode, http.StatusOK)
+	}
+
+	var listPayload jobListResponse
+	decodeJSON(t, listResp, &listPayload)
+	if len(listPayload.Jobs) == 0 {
+		t.Fatal("expected non-empty jobs list")
+	}
 }
 
 func TestMultipartUploadRejectsJSONContentType(t *testing.T) {
