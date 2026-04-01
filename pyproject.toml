@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi",
     "pandas",
+    "pypdf",
     "python-multipart",
     "qdrant-client",
     "structlog",
