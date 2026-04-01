@@ -3,10 +3,14 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api import api_router
 from app.error_handlers import register_error_handlers
+from app.logging_config import configure_logging
+from app.middleware import request_logging_middleware
 
 
 def create_app() -> FastAPI:
+    configure_logging()
     app = FastAPI(title="Paragraph Search Service")
+    app.middleware("http")(request_logging_middleware)
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
     app.include_router(api_router)
     register_error_handlers(app)
