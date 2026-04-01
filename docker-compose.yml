@@ -18,9 +18,12 @@ services:
     ports:
       - "5001:5000"
     volumes:
-      - .:/app 
+      - .:/app
+      - hf-cache:/root/.cache/huggingface
     environment:
       - UV_PROJECT_ENVIRONMENT=/opt/venv
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/root/.cache/huggingface
     depends_on:
       - qdrant
     command: uv run uvicorn app.main:app --host 0.0.0.0 --port 5000
@@ -30,3 +33,6 @@ services:
 networks:
   qdrant-network:
     driver: bridge
+
+volumes:
+  hf-cache:
