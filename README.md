@@ -2,6 +2,12 @@
 
 FastAPI + Qdrant сервис поиска параграфов по векторному сходству (E5) с React frontend.
 
+## Master Plan
+
+Подробная спецификация реализации полноценного Chat RAG:
+
+- [docs/RAG_IMPLEMENTATION_PLAN.md](docs/RAG_IMPLEMENTATION_PLAN.md)
+
 ## Архитектура
 
 - `frontend` — React SPA (Vite + TypeScript + React Query), отдается через Nginx
