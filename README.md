@@ -100,7 +100,7 @@ DOCUMENTS_STORAGE_PATH=/tmp/rag_documents
 ## Parser зависимости
 
 - `python-multipart` уже включен и нужен для `multipart/form-data` upload.
-- Для PDF-парсинга нужен `pypdf` (на текущем этапе опционально, будет включен в следующем шаге ingestion hardening).
+- `pypdf` уже включен для PDF-парсинга.
 
 ## Перевекторизация данных
 

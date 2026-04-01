@@ -348,6 +348,7 @@
 | done | 2026-04-02 | Go integration-тесты ingestion API | `e52fdbf` |
 | done | 2026-04-02 | Local storage adapter и перевод ingestion на хранение файлов | `e95e95b` |
 | done | 2026-04-02 | Unit-тесты локального storage adapter | `e262bc6` |
+| done | 2026-04-02 | Подключение `pypdf` для PDF parsing | `e139c2a` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
