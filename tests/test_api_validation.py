@@ -105,6 +105,17 @@ class ApiValidationTestCase(unittest.TestCase):
             payload = response.json()
             self.assertEqual(payload["error"]["code"], "invalid_field")
 
+    def test_indexing_validates_document_metadata(self):
+        for endpoint in self.INDEX_ENDPOINTS:
+            response = self.client.post(
+                endpoint,
+                json={"document_name": "doc", "documents": [{"content": "abc", "metadata": "bad"}]},
+            )
+
+            self.assertEqual(response.status_code, 400)
+            payload = response.json()
+            self.assertEqual(payload["error"]["code"], "invalid_field")
+
     @patch("backend.api.routes.get_api_service")
     def test_indexing_success(self, get_api_service_mock):
         service = get_api_service_mock.return_value
@@ -115,7 +126,14 @@ class ApiValidationTestCase(unittest.TestCase):
                 endpoint,
                 json={
                     "document_name": "doc",
-                    "documents": [{"content": "abc", "keywords": [" A "], "dataframe": "df"}],
+                    "documents": [
+                        {
+                            "content": "abc",
+                            "keywords": [" A "],
+                            "dataframe": "df",
+                            "metadata": {"page": 4},
+                        }
+                    ],
                 },
             )
 
@@ -123,6 +141,8 @@ class ApiValidationTestCase(unittest.TestCase):
             payload = response.json()
             self.assertEqual(payload["status"], "success")
         self.assertEqual(service.index_documents.call_count, len(self.INDEX_ENDPOINTS))
+        _, call_documents = service.index_documents.call_args.args
+        self.assertEqual(call_documents[0]["metadata"]["page"], 4)
 
 
 if __name__ == "__main__":

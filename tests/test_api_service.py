@@ -41,6 +41,28 @@ class ApiServiceTestCase(unittest.TestCase):
 
         self.assertEqual(context.exception.details["index"], 0)
 
+    def test_index_documents_passes_metadata_to_qdrant(self):
+        mock_vectorizer = Mock()
+        mock_vectorizer.vectorize_text.return_value = [0.1, 0.2]
+        mock_qdrant = Mock()
+        service = ApiService(qdrant_service=mock_qdrant, vectorizer=mock_vectorizer)
+
+        service.index_documents(
+            "doc",
+            [
+                {
+                    "content": "test",
+                    "keywords": ["K1"],
+                    "dataframe": None,
+                    "metadata": {"document_id": "d1", "chunk_index": 3},
+                }
+            ],
+        )
+
+        call_kwargs = mock_qdrant.index_document.call_args.kwargs
+        self.assertEqual(call_kwargs["metadata"]["document_id"], "d1")
+        self.assertEqual(call_kwargs["metadata"]["chunk_index"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()
