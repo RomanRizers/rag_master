@@ -317,7 +317,7 @@
 - `E3`: Worker + parsing + chunking — `todo`
 - `E4`: Embedding + Qdrant upsert + job completion — `todo`
 - `E5`: Chat sessions/messages API + retrieval pipeline + rerank — `in_progress`
-- `E6`: LLM provider + streaming SSE + citations — `in_progress`
+- `E6`: LLM provider + streaming SSE + citations — `done`
 - `E7`: Frontend documents/chat UX — `todo`
 - `E8`: Tests hardening + observability + readiness checks — `todo`
 
@@ -336,6 +336,7 @@
 | done | 2026-04-02 | LLM config + `LLMError` для реализации (`openrouter|local`) | `11d060f` |
 | done | 2026-04-02 | Реализация провайдера LLM и фабрики выбора | `9b5babd` |
 | done | 2026-04-02 | Retrieval-контекст и citations в chat-ответах | `280a810` |
+| done | 2026-04-02 | SSE streaming endpoint для chat (`/messages/stream`) + API-тест | `2101314` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
