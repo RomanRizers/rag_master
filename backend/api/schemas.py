@@ -122,6 +122,8 @@ class ChatSessionMessagesResponse(BaseModel):
 
 class ChatMessageRequest(BaseModel):
     message: str
+    top_k: int = Config.TOP_K_DEFAULT
+    keywords: list[str] | None = None
 
     @field_validator("message", mode="before")
     @classmethod
@@ -129,6 +131,28 @@ class ChatMessageRequest(BaseModel):
         if not isinstance(value, str) or not value.strip():
             raise ValueError("Message is required")
         return value.strip()
+
+    @field_validator("top_k")
+    @classmethod
+    def validate_top_k(cls, value: int):
+        if value < 1 or value > Config.TOP_K_MAX:
+            raise ValueError(f"'top_k' must be between 1 and {Config.TOP_K_MAX}")
+        return value
+
+    @field_validator("keywords", mode="before")
+    @classmethod
+    def validate_keywords(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError("'keywords' must be a list of non-empty strings")
+
+        normalized = []
+        for keyword in value:
+            if not isinstance(keyword, str) or not keyword.strip():
+                raise ValueError("'keywords' must be a list of non-empty strings")
+            normalized.append(keyword.strip())
+        return normalized
 
 
 class ChatSendMessageResponse(BaseModel):
