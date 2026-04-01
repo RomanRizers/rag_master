@@ -48,6 +48,15 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 5000
 docker-compose up --build
 ```
 
+Чтобы убрать предупреждение Hugging Face (`unauthenticated requests`) и ускорить загрузку модели, задайте токен перед запуском:
+
+```bash
+export HF_TOKEN=ваш_hf_token
+docker compose up --build -d
+```
+
+Токен передается в контейнер как переменная окружения, а кэш моделей сохраняется в Docker volume `hf-cache`.
+
 Дождитесь загрузки контейнеров, в терминале это должно выглядеть примерно так:
 
 ![Запуск контейнеров](https://drive.google.com/uc?id=1JS7yxtlyXYSZMTorV818dfNoODXu4AJL)
