@@ -28,6 +28,10 @@ export type Copy = {
   copyContent: string;
   copyKeywords: string;
   copied: string;
+  themeLabel: string;
+  themeLight: string;
+  themeDark: string;
+  themeSystem: string;
 };
 
 export const copy: Record<Language, Copy> = {
@@ -58,7 +62,11 @@ export const copy: Record<Language, Copy> = {
     sortContentLengthAsc: "Сначала короткие фрагменты",
     copyContent: "Копировать контент",
     copyKeywords: "Копировать ключевые слова",
-    copied: "Скопировано"
+    copied: "Скопировано",
+    themeLabel: "Тема",
+    themeLight: "Светлая",
+    themeDark: "Темная",
+    themeSystem: "Системная"
   },
   en: {
     title: "Paragraph Search",
@@ -87,7 +95,11 @@ export const copy: Record<Language, Copy> = {
     sortContentLengthAsc: "Shortest snippets first",
     copyContent: "Copy content",
     copyKeywords: "Copy keywords",
-    copied: "Copied"
+    copied: "Copied",
+    themeLabel: "Theme",
+    themeLight: "Light",
+    themeDark: "Dark",
+    themeSystem: "System"
   }
 };
 

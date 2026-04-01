@@ -1,8 +1,9 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 
 import { ApiRequestError, searchParagraphs } from "../api/client";
 import { STORAGE_LANG_KEY, copy, type Language } from "../i18n";
+import { getSystemPrefersDark, parseThemeMode, resolveTheme, STORAGE_THEME_KEY, type ThemeMode } from "../theme";
 import { extractKeywords, filterByKeywords, sortResults, type SortMode } from "../utils/search";
 import { ResultCard } from "./ResultCard";
 import { ResultsControls } from "./ResultsControls";
@@ -31,6 +32,9 @@ async function safeCopy(text: string): Promise<boolean> {
 
 export function SearchPage() {
   const [language, setLanguage] = useState<Language>(getInitialLanguage);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() =>
+    parseThemeMode(localStorage.getItem(STORAGE_THEME_KEY))
+  );
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState(5);
   const [sortMode, setSortMode] = useState<SortMode>("relevance_desc");
@@ -53,9 +57,31 @@ export function SearchPage() {
     return sortResults(filterByKeywords(source, selectedKeywords), sortMode);
   }, [mutation.data?.results, selectedKeywords, sortMode]);
 
+  useEffect(() => {
+    function applyTheme() {
+      const nextTheme = resolveTheme(themeMode, getSystemPrefersDark());
+      document.documentElement.setAttribute("data-theme", nextTheme);
+    }
+
+    applyTheme();
+
+    if (themeMode !== "system") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    mediaQuery.addEventListener("change", applyTheme);
+    return () => mediaQuery.removeEventListener("change", applyTheme);
+  }, [themeMode]);
+
   function switchLanguage(nextLanguage: Language) {
     setLanguage(nextLanguage);
     localStorage.setItem(STORAGE_LANG_KEY, nextLanguage);
+  }
+
+  function switchTheme(nextTheme: ThemeMode) {
+    setThemeMode(nextTheme);
+    localStorage.setItem(STORAGE_THEME_KEY, nextTheme);
   }
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
@@ -121,6 +147,8 @@ export function SearchPage() {
         <SearchToolbar
           language={language}
           onSwitchLanguage={switchLanguage}
+          themeMode={themeMode}
+          onThemeModeChange={switchTheme}
           query={query}
           onQueryChange={setQuery}
           topK={topK}
