@@ -1,76 +1,62 @@
-# Сервис поиска параграфов
+# Paragraph Search Service
 
-Этот проект реализует систему поиска параграфов с использованием векторных представлений текста, ключевых слов и тегов. Мы применяем модели для векторизации текста и алгоритмы для поиска ближайших соседей Qdrant.
+FastAPI + Qdrant сервис поиска параграфов по векторному сходству (E5) с React frontend.
 
-## Стек технологий
+## Архитектура
 
-- **Backend**: Python, FastAPI
-- **Vector DB**: Qdrant
-- **Frontend**: HTML, CSS, JavaScript
-- **Model**: E5 (e5-base-en-ru)
-- **Deploy**: Docker
+- `frontend` — React SPA (Vite + TypeScript + React Query), отдается через Nginx
+- `fastapi-app` — backend API (FastAPI)
+- `qdrant` — векторная база
 
+Frontend и backend разделены по контейнерам.
 
-## Установка и запуск
+## Endpoints
 
+### Backend API
 
-### 1. Клонирование репозитория
+- `POST /api/searching` — основной endpoint поиска
+- `POST /api/indexing` — основной endpoint индексации
 
-Сначала склоинируйте репозиторий на свое устройство:
+### Legacy compatibility
 
-```bash
-git clone https://github.com/RomanRizers/gazprom_case
-cd gazprom_case
-```
+- `POST /searching` -> алиас к `/api/searching`
+- `POST /indexing` -> алиас к `/api/indexing`
 
-### 2. Локальный запуск через uv
+### Health
 
-Установите `uv`:
+- `GET /` -> `{ "status": "ok", "service": "fastapi-backend" }`
 
-```bash
-pip install uv
-```
-
-Синхронизируйте зависимости и запустите приложение:
+## Локальный запуск backend (без Docker)
 
 ```bash
 uv sync
 uv run uvicorn app.main:app --host 0.0.0.0 --port 5000
 ```
 
-После запуска сервис доступен по адресу `http://localhost:5000`.
-
-### 3. Запуск с помощью Docker Compose
-
-Для развертывания проекта с использованием docker-compose выполните следующую команду:
+## Запуск всего решения через Docker Compose
 
 ```bash
-docker-compose up --build
-```
-
-Чтобы убрать предупреждение Hugging Face (`unauthenticated requests`) и ускорить загрузку модели, задайте токен перед запуском:
-
-```bash
-export HF_TOKEN=ваш_hf_token
 docker compose up --build -d
 ```
 
-Токен передается в контейнер как переменная окружения, а кэш моделей сохраняется в Docker volume `hf-cache`.
+После запуска:
 
-Дождитесь загрузки контейнеров, в терминале это должно выглядеть примерно так:
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:5001`
+- Qdrant HTTP: `http://localhost:6334`
 
-![Запуск контейнеров](https://drive.google.com/uc?id=1JS7yxtlyXYSZMTorV818dfNoODXu4AJL)
+## Hugging Face token (рекомендуется)
 
+Чтобы убрать warning про unauthenticated HF requests и ускорить загрузку модели:
 
-### 4. Переход к клиентской части
+```bash
+export HF_TOKEN=hf_xxx
+docker compose up -d --build
+```
 
-После завершения сборки проект будет доступен по ссылке `http://localhost:5000`
+Токен читается из `.env` и прокидывается в `fastapi-app`.
 
-
-
-### 5. Если хотите заново векторизовать данные и поместить в Qdrant
-
-При запуске контейнеров готовая коллекция подтягивается автоматически. Для ручной перевекторизации:
+## Перевекторизация данных
 
 ```bash
 cd app/embeddings
@@ -78,137 +64,8 @@ uv run dataset_loader.py
 uv run qdrant_uploader.py
 ```
 
-Скрипты:
-- `dataset_loader.py` — векторизует датасет (CUDA поддерживается при наличии подходящей сборки `torch`).
-- `qdrant_uploader.py` — создает коллекцию и загружает векторы в Qdrant.
-    
+## Тесты backend
 
-## Документация API
-
-### 1. Эндпоинт поиска
-
-- **URL**: `http://127.0.0.1:5000/searching`
-- **Метод**: `POST`
-- **Описание**: Этот эндпоинт выполняет поиск параграфов, используя векторные представления текста и ключевые слова.
-- **Параметры запроса**:
-  - `query` (string): Текстовый запрос для поиска.
-  - `top_k` (integer, optional): Количество наиболее релевантных параграфов, которые должны быть возвращены. По умолчанию 5.
-  - `keywords` (array of strings, optional): Массив ключевых слов для фильтрации поиска. Если не переданы, будет произведен поиск по всему тексту.
-
-#### Пример запроса:
-
-```json
-{
-  "query": "In the novel 'Crime and Punishment', who is the benefactor behind Dunya's watches, and why was Razumikhin particularly pleased to learn this?",
-  "top_k": 5,
-  "keywords": ["Zosimov left", "cute watches"]
-}
-```
-
-#### Пример ответа:
-```json
-{
-    "results": [
-        {
-            "id": "df9bdae9-7efb-5c7c-bb97-0bff6dbf057b",
-            "payload": {
-                "chunk_id": "df9bdae9-7efb-5c7c-bb97-0bff6dbf057b",
-                "content": "You don't need to go at all, stay! Zosimov left, so you should. Don't go... What's the time? Is it twelve already? What cute watches you have, Dunya! Why are you quiet again? Only I keep talking!.. \n - It's a gift from Marfa Petrovna, - answered Dunya. \n - And they're quite expensive, - added Pulcheria Alexandrovna. \n - Oh! They're big, almost not ladylike. \n - I like such, - said Dunya. \n 'So, it’s not from her fiancé', - Razumikhin thought to himself and was pleased for some unknown reason. \n - I thought it was Luzhin's gift, - Raskolnikov remarked. \n - No, he hasn't given anything to Dunechka yet.",
-                "keywords": [
-                    "zosimov left",
-                    "cute watches",
-                    "marfa petrovna",
-                    "quite expensive",
-                    "not ladylike",
-                    "fiancé",
-                    "luzhin's gift"
-                ]
-            },
-            "score": 0.8665101
-        }
-    ],
-    "total": 1
-}
-```
-
-
-### 2. Эндпоинт индексации
-
-- **URL**: `http://127.0.0.1:5000/indexing`
-- **Метод**: `POST`
-- **Описание**: Этот эндпоинт выполняет индексацию документов в Qdrant. Каждый документ должен содержать текст, ключевые слова и данные о категории (dataframe).
-- **Параметры запроса**:
-  - `document_name` (string): Название набора данных или коллекции документов (например, название документа).
-  - `documents` (array of objects): Массив объектов, каждый из которых содержит:
-    - `content` (string): Текстовый контент документа.
-    - `dataframe` (string): Категория или метаданные, связанные с документом.
-    - `keywords` (array of strings): Массив ключевых слов, связанных с документом.
-
-#### Пример запроса:
-
-```json
-{
-  "document_name": "Document 1",
-  "documents": [
-    {
-      "content": "CRM позволяет автоматизировать процесс регистрации пользователей на платформе.",
-      "dataframe": "Технологии",
-      "keywords": ["CRM", "Регистрация"]
-    },
-    {
-      "content": "Использование API ускоряет интеграцию внешних сервисов в основную систему.",
-      "dataframe": "Интеграция",
-      "keywords": ["API", "Интеграция"]
-    },
-    {
-      "content": "Нефтяная промышленность активно внедряет цифровизацию для повышения эффективности.",
-      "dataframe": "Промышленность",
-      "keywords": ["Цифровизация", "Нефть"]
-    }
-  ]
-}
-```
-
-
-#### Пример ответа:
-
-```json
-{
-  "status": "success",
-  "message": "3 documents indexed."
-}
-```
-
-
-## Тестирование API
-
-Тестирование API проводилось в Postman.
-
-- Перейдите на вкладку Headers
-- Убедитесь, что там есть следующая пара:
 ```bash
-Key: Content-Type
-Value: application/json
+uv run python -m unittest discover -s tests
 ```
-- Если заголовок отсутствует, добавьте его вручную
-
-![indexing](https://drive.google.com/uc?id=1lHl6KSJLUh4TZAyKsNr5_l2IZJc5tMcT)
-
-![searching](https://drive.google.com/uc?id=1CjGrglX9dEmMqDZ7QPAVCC2u34gzZSOE)
-
-
-## Скриншоты клиентской части
-
-![front_rus](https://drive.google.com/uc?id=17KWwvlmy9JMcxsifSAXzJKqggmqyoAxh)
-
-
-![front_en](https://drive.google.com/uc?id=1Vi_450zsfS5CpnmizpA5n5b2gF3gGv5-)
-
-
-
-## Датасет до и после векторизации
-
-до:
-![до](https://drive.google.com/uc?id=1CtM5O2wYpt4uyP6X1rwpDApL9c36tInF)
-после:
-![после](https://drive.google.com/uc?id=1UWuVDT6mjXiianEucE75DKNxF_YBk4HK)

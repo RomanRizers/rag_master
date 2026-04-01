@@ -10,5 +10,7 @@ logs/
 .DS_Store
 .vscode/
 .idea/
+frontend/node_modules/
+frontend/dist/
 
 vector_e5-base-en-ru.json

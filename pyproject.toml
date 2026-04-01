@@ -5,7 +5,6 @@ description = "Paragraph search service based on FastAPI + Qdrant + E5 embedding
 requires-python = ">=3.11"
 dependencies = [
     "fastapi",
-    "jinja2",
     "pandas",
     "qdrant-client",
     "structlog",
