@@ -39,6 +39,8 @@ Frontend и backend разделены по контейнерам.
 ### Health
 
 - `GET /` -> `{ "status": "ok", "service": "fastapi-backend" }`
+- `GET /health/live` -> live check
+- `GET /health/ready` -> readiness check (`qdrant` + `storage`)
 
 ## Локальный запуск backend (без Docker)
 
