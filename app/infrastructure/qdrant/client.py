@@ -35,12 +35,21 @@ class QdrantService:
         logger.info("qdrant_search_started", top_k=top_k, keywords_count=len(keywords) if keywords else 0)
 
         try:
-            search_result = self.client.search(
-                collection_name=self.collection_name,
-                query_vector=query_vector,
-                query_filter=query_filter,
-                limit=top_k,
-            )
+            if hasattr(self.client, "query_points"):
+                response = self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=query_vector,
+                    query_filter=query_filter,
+                    limit=top_k,
+                )
+                search_result = response.points
+            else:
+                search_result = self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_vector,
+                    query_filter=query_filter,
+                    limit=top_k,
+                )
         except Exception as error:
             raise StorageError(message="Qdrant search failed", details={"reason": str(error)}) from error
         logger.info("qdrant_search_finished", results_count=len(search_result))
