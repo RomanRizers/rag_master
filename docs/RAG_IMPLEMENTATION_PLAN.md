@@ -314,7 +314,7 @@
 ### Статусы этапов
 - `E1`: DB + S3 + базовые модели документов/джоб — `todo`
 - `E2`: Upload API + storage adapter — `done`
-- `E3`: Worker + parsing + chunking — `in_progress`
+- `E3`: Worker + parsing + chunking — `done`
 - `E4`: Embedding + Qdrant upsert + job completion — `in_progress`
 - `E5`: Chat sessions/messages API + retrieval pipeline + rerank — `in_progress`
 - `E6`: LLM provider + streaming SSE + citations — `done`
@@ -356,6 +356,8 @@
 | done | 2026-04-02 | MinIO сервис в compose и S3 env wiring | `2455d8f` |
 | done | 2026-04-02 | metadata чанков в indexing pipeline и Qdrant payload | `64549c8` |
 | done | 2026-04-02 | Тесты metadata validation/forwarding в indexing | `f88fc37` |
+| done | 2026-04-02 | Retry policy и attempt tracking для ingestion jobs | `43eadc1` |
+| done | 2026-04-02 | Unit-тесты retry-поведения ingestion jobs | `4f20889` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
