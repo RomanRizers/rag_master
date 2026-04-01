@@ -1,6 +1,7 @@
 from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchAny
 import qdrant_client
 from app.config import Config
+from app.exceptions import StorageError
 import uuid
 
 
@@ -28,12 +29,15 @@ class QdrantService:
                 ]
             )
 
-        search_result = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=query_vector,
-            query_filter=query_filter,
-            limit=top_k,
-        )
+        try:
+            search_result = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=query_vector,
+                query_filter=query_filter,
+                limit=top_k,
+            )
+        except Exception as error:
+            raise StorageError(message="Qdrant search failed", details={"reason": str(error)}) from error
 
         return [
             {
@@ -62,8 +66,10 @@ class QdrantService:
             }
         )
 
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=[point]
-        )
-
+        try:
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=[point]
+            )
+        except Exception as error:
+            raise StorageError(message="Qdrant upsert failed", details={"reason": str(error)}) from error
