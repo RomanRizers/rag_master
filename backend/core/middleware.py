@@ -25,17 +25,20 @@ async def request_logging_middleware(request: Request, call_next):
         client_ip=client_host,
     )
 
-    response = await call_next(request)
-
-    duration_ms = round((time.perf_counter() - start) * 1000, 2)
-    response.headers["X-Request-ID"] = request_id
-
-    logger.info(
-        "request_finished",
-        request_id=request_id,
-        method=method,
-        path=path,
-        status_code=response.status_code,
-        duration_ms=duration_ms,
-    )
-    return response
+    response = None
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers["X-Request-ID"] = request_id
+        return response
+    finally:
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        logger.info(
+            "request_finished",
+            request_id=request_id,
+            method=method,
+            path=path,
+            status_code=status_code,
+            duration_ms=duration_ms,
+        )

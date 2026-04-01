@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from backend.api.dependencies import ensure_json_content_type
 from backend.api.schemas import IndexingRequest, SearchRequest
@@ -26,7 +27,12 @@ def index():
 @api_router.post("/searching")
 async def search(payload: SearchRequest, _: None = Depends(ensure_json_content_type)):
     """Обрабатывает запрос поиска."""
-    results = get_api_service().search_query(payload.query, payload.top_k, payload.keywords)
+    results = await run_in_threadpool(
+        get_api_service().search_query,
+        payload.query,
+        payload.top_k,
+        payload.keywords,
+    )
     return JSONResponse(content=results)
 
 
@@ -34,7 +40,8 @@ async def search(payload: SearchRequest, _: None = Depends(ensure_json_content_t
 @api_router.post("/indexing")
 async def indexing(payload: IndexingRequest, _: None = Depends(ensure_json_content_type)):
     """Обрабатывает запрос на индексацию документов."""
-    result = get_api_service().index_documents(
+    result = await run_in_threadpool(
+        get_api_service().index_documents,
         payload.document_name,
         [document.model_dump() for document in payload.documents],
     )
