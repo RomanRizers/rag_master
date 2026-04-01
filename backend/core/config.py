@@ -23,3 +23,10 @@ class Config:
 
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
     DOCUMENTS_STORAGE_PATH = os.getenv("DOCUMENTS_STORAGE_PATH", "/tmp/rag_documents")
+
+    S3_ENDPOINT = os.getenv("S3_ENDPOINT", "").strip()
+    S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "").strip()
+    S3_SECRET_KEY = os.getenv("S3_SECRET_KEY", "").strip()
+    S3_BUCKET = os.getenv("S3_BUCKET", "rag-documents").strip()
+    S3_REGION = os.getenv("S3_REGION", "us-east-1").strip()
+    S3_AUTO_CREATE_BUCKET = os.getenv("S3_AUTO_CREATE_BUCKET", "1").strip() in {"1", "true", "yes"}
