@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 from typing import Iterator
 from threading import RLock
 from uuid import uuid4
@@ -59,9 +60,10 @@ class ChatService:
             effective_top_k = top_k or Config.TOP_K_DEFAULT
             retrieval = self.retriever(message.strip(), effective_top_k, keywords)
             search_results = retrieval.get("results", [])
+            selected_results = _select_context_results(message.strip(), search_results)
 
-            context = _build_context(search_results)
-            citations = _build_citations(search_results)
+            context = _build_context(selected_results, Config.CHAT_MAX_CONTEXT_CHARS)
+            citations = _build_citations(selected_results)
 
             llm_messages = _build_llm_messages(history, context)
 
@@ -103,8 +105,9 @@ class ChatService:
         effective_top_k = top_k or Config.TOP_K_DEFAULT
         retrieval = self.retriever(clean_message, effective_top_k, keywords)
         search_results = retrieval.get("results", [])
-        context = _build_context(search_results)
-        citations = _build_citations(search_results)
+        selected_results = _select_context_results(clean_message, search_results)
+        context = _build_context(selected_results, Config.CHAT_MAX_CONTEXT_CHARS)
+        citations = _build_citations(selected_results)
         llm_messages = _build_llm_messages(llm_history, context)
 
         def token_stream():
@@ -145,14 +148,20 @@ def _default_retriever(query: str, top_k: int, keywords: list[str] | None):
     return ApiService().search_query(query, top_k=top_k, keywords=keywords)
 
 
-def _build_context(search_results: list[dict]) -> str:
+def _build_context(search_results: list[dict], max_chars: int) -> str:
     context_parts = []
+    total_len = 0
     for index, item in enumerate(search_results, start=1):
         payload = item.get("payload") or {}
         content = str(payload.get("content") or "").strip()
         if not content:
             continue
-        context_parts.append(f"[{index}] {content}")
+        part = f"[{index}] {content}"
+        projected_len = total_len + len(part) + (2 if context_parts else 0)
+        if projected_len > max_chars:
+            break
+        context_parts.append(part)
+        total_len = projected_len
     return "\n\n".join(context_parts)
 
 
@@ -183,3 +192,62 @@ def _build_citations(search_results: list[dict]) -> list[dict]:
             }
         )
     return citations
+
+
+def _select_context_results(query: str, search_results: list[dict]) -> list[dict]:
+    reranked = _rerank_results(query, search_results)
+    limit = max(1, Config.RERANK_TOP_N)
+    return reranked[:limit]
+
+
+def _rerank_results(query: str, search_results: list[dict]) -> list[dict]:
+    semantic_weight = min(1.0, max(0.0, Config.RERANK_SEMANTIC_WEIGHT))
+    lexical_weight = 1.0 - semantic_weight
+    query_tokens = set(_tokenize(query))
+    max_semantic = _max_semantic_score(search_results)
+
+    def rank_key(item: dict) -> tuple[float, float, str]:
+        payload = item.get("payload") or {}
+        content = str(payload.get("content") or "")
+        lexical_score = _lexical_overlap_score(query_tokens, content)
+        semantic_score = _normalized_semantic_score(item, max_semantic)
+        combined = semantic_weight * semantic_score + lexical_weight * lexical_score
+        stable_id = str(item.get("id") or "")
+        return combined, semantic_score, stable_id
+
+    return sorted(search_results, key=rank_key, reverse=True)
+
+
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"[a-zA-Zа-яА-Я0-9]+", text.lower())
+
+
+def _lexical_overlap_score(query_tokens: set[str], content: str) -> float:
+    if not query_tokens:
+        return 0.0
+    content_tokens = set(_tokenize(content))
+    if not content_tokens:
+        return 0.0
+    overlap = query_tokens.intersection(content_tokens)
+    return len(overlap) / float(len(query_tokens))
+
+
+def _max_semantic_score(search_results: list[dict]) -> float:
+    max_score = 0.0
+    for item in search_results:
+        max_score = max(max_score, _safe_float(item.get("score")))
+    return max_score
+
+
+def _normalized_semantic_score(item: dict, max_semantic: float) -> float:
+    score = _safe_float(item.get("score"))
+    if max_semantic > 0:
+        return score / max_semantic
+    return score
+
+
+def _safe_float(value) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
