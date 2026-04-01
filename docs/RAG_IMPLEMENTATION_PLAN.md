@@ -343,6 +343,9 @@
 | done | 2026-04-02 | In-memory сервисы документов и ingestion jobs | `d220c8c` |
 | done | 2026-04-02 | Upload/list/index/job endpoints + multipart dependency | `063cdf6` |
 | done | 2026-04-02 | API тесты ingestion endpoints | `818e98e` |
+| done | 2026-04-02 | README + tracker update по ingestion этапам | `2f5ec68` |
+| done | 2026-04-02 | Unit-тесты parser/chunker | `8e777f6` |
+| done | 2026-04-02 | Go integration-тесты ingestion API | `e52fdbf` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
