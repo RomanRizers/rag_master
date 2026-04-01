@@ -89,11 +89,51 @@ func TestHealthEndpoint(t *testing.T) {
 	if payload.Status != "ok" {
 		t.Fatalf("unexpected status field: got %q", payload.Status)
 	}
+	if payload.Service != "fastapi-backend" {
+		t.Fatalf("unexpected service field: got %q", payload.Service)
+	}
+}
+
+func TestRequestIDEchoesIncomingHeader(t *testing.T) {
+	const reqID = "go-test-request-id-123"
+
+	url := baseURL() + "/"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("new request failed: %v", err)
+	}
+	req.Header.Set("X-Request-ID", reqID)
+
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if got := response.Header.Get("X-Request-ID"); got != reqID {
+		t.Fatalf("unexpected X-Request-ID header: got %q, want %q", got, reqID)
+	}
+}
+
+func TestRequestIDIsGeneratedWhenMissing(t *testing.T) {
+	response := doRequest(t, http.MethodGet, "/", nil, "")
+	defer response.Body.Close()
+
+	if got := strings.TrimSpace(response.Header.Get("X-Request-ID")); got == "" {
+		t.Fatal("expected non-empty X-Request-ID header")
+	}
 }
 
 func TestSearchRejectsNonJSONContentType(t *testing.T) {
 	for _, endpoint := range searchEndpoints {
 		response := doRequest(t, http.MethodPost, endpoint, []byte(`{"query":"hello"}`), "text/plain")
+		assertErrorCode(t, response, http.StatusUnsupportedMediaType, "invalid_content_type")
+	}
+}
+
+func TestSearchRejectsMissingContentType(t *testing.T) {
+	for _, endpoint := range searchEndpoints {
+		response := doRequest(t, http.MethodPost, endpoint, []byte(`{"query":"hello"}`), "")
 		assertErrorCode(t, response, http.StatusUnsupportedMediaType, "invalid_content_type")
 	}
 }
@@ -146,6 +186,23 @@ func TestSearchAcceptsVendorJSONContentType(t *testing.T) {
 	}
 }
 
+func TestSearchAcceptsJSONWithCharset(t *testing.T) {
+	for _, endpoint := range searchEndpoints {
+		response := doRequest(
+			t,
+			http.MethodPost,
+			endpoint,
+			[]byte(`{"query":"hello","top_k":1}`),
+			"application/json; charset=utf-8",
+		)
+		if response.StatusCode == http.StatusUnsupportedMediaType {
+			defer response.Body.Close()
+			t.Fatalf("endpoint %s rejected JSON with charset", endpoint)
+		}
+		response.Body.Close()
+	}
+}
+
 func TestIndexingRequiresDocumentName(t *testing.T) {
 	for _, endpoint := range indexEndpoints {
 		response := doRequest(
@@ -165,6 +222,19 @@ func TestIndexingRequiresDocumentName(t *testing.T) {
 		if payload.Error.Message != "No document name provided" {
 			t.Fatalf("unexpected message: got %q", payload.Error.Message)
 		}
+	}
+}
+
+func TestIndexingRejectsNonJSONContentType(t *testing.T) {
+	for _, endpoint := range indexEndpoints {
+		response := doRequest(
+			t,
+			http.MethodPost,
+			endpoint,
+			[]byte(`{"document_name":"doc","documents":[{"content":"x"}]}`),
+			"text/plain",
+		)
+		assertErrorCode(t, response, http.StatusUnsupportedMediaType, "invalid_content_type")
 	}
 }
 
