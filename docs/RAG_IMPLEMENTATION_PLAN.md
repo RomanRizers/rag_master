@@ -361,6 +361,8 @@
 | done | 2026-04-02 | Hybrid rerank + context budget в chat pipeline + unit-тесты | `e75edcf` |
 | done | 2026-04-02 | README/example.env: env настройки rerank и context budget | `00b1c82` |
 | done | 2026-04-02 | `GET /api/jobs` + filters (`status`, `document_id`) + API tests | `35a8025` |
+| done | 2026-04-02 | README/docs: update endpoints + progress tracker | `bdbd58f` |
+| done | 2026-04-02 | `GET /api/chat/sessions` endpoint + chat API test | `0e3cfb9` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:

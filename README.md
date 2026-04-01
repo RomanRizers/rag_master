@@ -28,6 +28,7 @@ Frontend и backend разделены по контейнерам.
 - `GET /api/jobs` — список job индексации (filters: `status`, `document_id`)
 - `GET /api/jobs/{job_id}` — получить статус job индексации
 - `POST /api/chat/sessions` — создать chat-сессию
+- `GET /api/chat/sessions` — список chat-сессий
 - `POST /api/chat/sessions/{session_id}/messages` — отправить сообщение в сессию
 - `POST /api/chat/sessions/{session_id}/messages/stream` — SSE-streaming ответа
 - `GET /api/chat/sessions/{session_id}/messages` — получить историю сообщений
