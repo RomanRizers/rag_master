@@ -1,18 +1,31 @@
 from app.qdrant_client import QdrantService
 from app.vectorizer import TextVectorizer
+from app.exceptions import VectorizationError, StorageError
 
 class ApiService:
-    def __init__(self):
-        self.qdrant_service = QdrantService()
-        self.vectorizer = TextVectorizer()
+    def __init__(self, qdrant_service=None, vectorizer=None):
+        self.qdrant_service = qdrant_service or QdrantService()
+        self.vectorizer = vectorizer or TextVectorizer()
 
     def search_query(self, query: str, top_k: int, keywords: list = None):
         """Выполняет поиск по запросу и возвращает результаты."""
         if keywords:
             keywords = [kw.lower() for kw in keywords]
 
-        query_vector = self.vectorizer.vectorize_text(query)
-        search_results = self.qdrant_service.search(query_vector, top_k, keywords)
+        try:
+            query_vector = self.vectorizer.vectorize_text(query)
+        except VectorizationError:
+            raise
+        except Exception as error:
+            raise VectorizationError(details={"reason": str(error)}) from error
+
+        try:
+            search_results = self.qdrant_service.search(query_vector, top_k, keywords)
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(details={"reason": str(error)}) from error
+
         return {
             "results": search_results,
             "total": len(search_results)
@@ -20,18 +33,35 @@ class ApiService:
 
     def index_documents(self, document_name: str, documents: list):
         """Индексирует документы в Qdrant."""
-        for document in documents:
+        for index, document in enumerate(documents):
             content = document.get('content')
             keywords = document.get('keywords', [])
             dataframe = document.get('dataframe', None)
             keywords = [kw.lower() for kw in keywords]
 
-            content_vector = self.vectorizer.vectorize_text(content)
-            self.qdrant_service.index_document(
-                document_name=document_name,
-                content_vector=content_vector,
-                content=content,
-                keywords=keywords,
-                dataframe=dataframe
-            )
+            try:
+                content_vector = self.vectorizer.vectorize_text(content)
+            except VectorizationError:
+                raise
+            except Exception as error:
+                raise VectorizationError(
+                    message="Vectorization failed while indexing",
+                    details={"index": index, "reason": str(error)},
+                ) from error
+
+            try:
+                self.qdrant_service.index_document(
+                    document_name=document_name,
+                    content_vector=content_vector,
+                    content=content,
+                    keywords=keywords,
+                    dataframe=dataframe
+                )
+            except StorageError:
+                raise
+            except Exception as error:
+                raise StorageError(
+                    message="Storage failed while indexing",
+                    details={"index": index, "reason": str(error)},
+                ) from error
         return {"status": "success", "message": f"{len(documents)} documents indexed."}
