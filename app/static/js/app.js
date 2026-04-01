@@ -19,21 +19,30 @@ document.getElementById('searchButton').addEventListener('click', async () => {
         const data = await response.json();
 
         const resultsContainer = document.getElementById('results');
-        resultsContainer.innerHTML = '';
+        clearElement(resultsContainer);
 
         if (response.ok && data.results.length > 0) {
             data.results.forEach(result => {
-                const resultDiv = document.createElement('div'); 
-                resultDiv.className = 'result'; 
-                resultDiv.innerHTML = `
-                    <p><strong>Score:</strong> ${result.score}</p> <!-- Показываем оценку результата -->
-                    <p><strong>Контент:</strong> ${result.payload.content || 'No content available'}</p> <!-- Показываем контент или сообщение о его отсутствии -->
-                    <p><strong>Ключевые слова:</strong> ${result.payload.keywords?.join(', ') || 'No keywords available'}</p> <!-- Показываем ключевые слова -->
-                `;
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'result';
+
+                const payload = result.payload || {};
+                appendResultLine(resultDiv, 'Score', String(result.score ?? 'N/A'));
+                appendResultLine(resultDiv, 'Контент', payload.content || 'No content available');
+                appendResultLine(
+                    resultDiv,
+                    'Ключевые слова',
+                    Array.isArray(payload.keywords) && payload.keywords.length > 0
+                        ? payload.keywords.join(', ')
+                        : 'No keywords available'
+                );
+
                 resultsContainer.appendChild(resultDiv);
             });
         } else {
-             resultsContainer.innerHTML = `<p>No results found.</p>`;
+            const noResults = document.createElement('p');
+            noResults.textContent = 'No results found.';
+            resultsContainer.appendChild(noResults);
         }
         
     } catch (error) {
@@ -41,6 +50,21 @@ document.getElementById('searchButton').addEventListener('click', async () => {
         alert("An error occurred while searching. Please check the console for details.");
     }
 });
+
+function clearElement(element) {
+    while (element.firstChild) {
+        element.removeChild(element.firstChild);
+    }
+}
+
+function appendResultLine(container, label, value) {
+    const paragraph = document.createElement('p');
+    const strong = document.createElement('strong');
+    strong.textContent = `${label}:`;
+    paragraph.appendChild(strong);
+    paragraph.appendChild(document.createTextNode(` ${value}`));
+    container.appendChild(paragraph);
+}
 
 const tooltip = document.getElementById('tooltipTopK');
 const inputTopK = document.getElementById('top_k');
