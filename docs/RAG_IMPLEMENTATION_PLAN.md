@@ -309,6 +309,36 @@
 - green test run;
 - commit hash записан в changelog этого файла.
 
+## 10.1 Progress tracker (обновляется после каждого commit)
+
+### Статусы этапов
+- `E1`: DB + S3 + базовые модели документов/джоб — `todo`
+- `E2`: Upload API + storage adapter — `todo`
+- `E3`: Worker + parsing + chunking — `todo`
+- `E4`: Embedding + Qdrant upsert + job completion — `todo`
+- `E5`: Chat sessions/messages API + retrieval pipeline + rerank — `in_progress`
+- `E6`: LLM provider + streaming SSE + citations — `in_progress`
+- `E7`: Frontend documents/chat UX — `todo`
+- `E8`: Tests hardening + observability + readiness checks — `todo`
+
+### Выполненные изменения (changelog)
+| Status | Date | Task | Commit |
+|---|---|---|---|
+| done | 2026-04-02 | Master plan + hybrid provider strategy (`openrouter` + `local`) | `20d9468` |
+| done | 2026-04-02 | README link на master-plan | `ca600f1` |
+| done | 2026-04-02 | LLM config (`LLM_PROVIDER`, `OPENROUTER_*`, `LOCAL_LLM_*`) + `LLMError` | `11d060f` |
+| done | 2026-04-02 | Абстракция провайдера LLM и фабрика `openrouter|local` | `9b5babd` |
+| done | 2026-04-02 | Unit-тесты провайдера LLM | `4c61689` |
+| done | 2026-04-02 | Базовый `ChatService` + chat-схемы API | `30a0684` |
+| done | 2026-04-02 | Первые chat endpoints (`create/send/history`) | `a3a5d5a` |
+| done | 2026-04-02 | README: chat endpoints + LLM env | `3eff399` |
+
+### Правило ведения трекера
+- После каждого нового коммита:
+  - обновить статус этапа (`todo/in_progress/done`);
+  - добавить строку в таблицу changelog;
+  - при переходе этапа в `done` указать ключевые тесты, которыми он подтверждён.
+
 ## 11. Commit policy (обязательная)
 
 ### Базовое правило
