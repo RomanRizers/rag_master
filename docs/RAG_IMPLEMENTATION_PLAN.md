@@ -313,7 +313,7 @@
 
 ### Статусы этапов
 - `E1`: DB + S3 + базовые модели документов/джоб — `todo`
-- `E2`: Upload API + storage adapter — `in_progress`
+- `E2`: Upload API + storage adapter — `done`
 - `E3`: Worker + parsing + chunking — `in_progress`
 - `E4`: Embedding + Qdrant upsert + job completion — `todo`
 - `E5`: Chat sessions/messages API + retrieval pipeline + rerank — `in_progress`
@@ -351,6 +351,9 @@
 | done | 2026-04-02 | Подключение `pypdf` для PDF parsing | `e139c2a` |
 | done | 2026-04-02 | Health endpoints `/health/live` и `/health/ready` | `c31ef27` |
 | done | 2026-04-02 | Unit-тесты health endpoints | `e4f2601` |
+| done | 2026-04-02 | S3 storage adapter (`boto3`) + factory switch `local|s3` | `f4a5f95` |
+| done | 2026-04-02 | Тесты storage adapter для `s3` и storage factory | `0ca4885` |
+| done | 2026-04-02 | MinIO сервис в compose и S3 env wiring | `2455d8f` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:

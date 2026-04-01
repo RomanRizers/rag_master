@@ -60,6 +60,8 @@ docker compose up --build -d
 - Frontend: `http://localhost:3000`
 - Backend API: `http://localhost:5001`
 - Qdrant HTTP: `http://localhost:6334`
+- MinIO API: `http://localhost:9000`
+- MinIO Console: `http://localhost:9001`
 
 ## Hugging Face token (рекомендуется)
 
@@ -97,7 +99,19 @@ STORAGE_BACKEND=local
 DOCUMENTS_STORAGE_PATH=/tmp/rag_documents
 ```
 
-Сейчас реализован локальный файловый adapter (подготовка к S3/MinIO adapter на следующем этапе).
+Для S3/MinIO:
+
+```bash
+STORAGE_BACKEND=s3
+S3_ENDPOINT=http://minio:9000
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_BUCKET=rag-documents
+S3_REGION=us-east-1
+S3_AUTO_CREATE_BUCKET=1
+```
+
+Поддерживаются оба варианта: `local` и `s3`.
 
 ## Parser зависимости
 
