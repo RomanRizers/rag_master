@@ -83,6 +83,12 @@ RAG_API_BASE_URL=http://localhost:5001 go test ./tests -v
 RAG_RUN_SLOW_E2E=1 go test ./tests -v -run TestOptionalIndexAndSearchFlow
 ```
 
+## Тесты backend (Python, optional)
+
+```bash
+uv run python -m unittest discover -s tests
+```
+
 ## Тесты frontend
 
 ```bash
