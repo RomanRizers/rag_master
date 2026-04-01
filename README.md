@@ -81,6 +81,9 @@ LLM_PROVIDER=openrouter
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_API_KEY=...
 OPENROUTER_MODEL=...
+RERANK_TOP_N=8
+RERANK_SEMANTIC_WEIGHT=0.7
+CHAT_MAX_CONTEXT_CHARS=6000
 ```
 
 Для локальной модели (OpenAI-compatible gateway):

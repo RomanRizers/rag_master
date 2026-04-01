@@ -358,6 +358,7 @@
 | done | 2026-04-02 | Тесты metadata validation/forwarding в indexing | `f88fc37` |
 | done | 2026-04-02 | Retry policy и attempt tracking для ingestion jobs | `43eadc1` |
 | done | 2026-04-02 | Unit-тесты retry-поведения ingestion jobs | `4f20889` |
+| done | 2026-04-02 | Hybrid rerank + context budget в chat pipeline + unit-тесты | `e75edcf` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
