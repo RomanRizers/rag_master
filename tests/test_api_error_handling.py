@@ -10,7 +10,7 @@ from app.main import create_app
 class ApiErrorHandlingTestCase(unittest.TestCase):
     def setUp(self):
         app = create_app()
-        self.client = TestClient(app)
+        self.client = TestClient(app, raise_server_exceptions=False)
 
     @patch("app.api.get_api_service")
     def test_maps_vectorization_error(self, get_api_service_mock):
