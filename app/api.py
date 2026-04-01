@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from app.config import Config
+from app.schemas import IndexingRequest, SearchRequest
 from app.services.api_service import ApiService
-from app.validation import parse_json_body, validate_indexing_request, validate_search_request
+from app.validation import ensure_json_content_type
 
 api_router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -25,24 +25,17 @@ def index(request: Request):
 
 
 @api_router.post("/searching")
-async def search(request: Request):
+async def search(payload: SearchRequest, _: None = Depends(ensure_json_content_type)):
     """Обрабатывает запрос поиска."""
-    data = await parse_json_body(request)
-    query, top_k, keywords = validate_search_request(
-        data,
-        top_k_default=Config.TOP_K_DEFAULT,
-        top_k_max=Config.TOP_K_MAX,
-    )
-
-    results = get_api_service().search_query(query, top_k, keywords)
+    results = get_api_service().search_query(payload.query, payload.top_k, payload.keywords)
     return JSONResponse(content=results)
 
 
 @api_router.post("/indexing")
-async def indexing(request: Request):
+async def indexing(payload: IndexingRequest, _: None = Depends(ensure_json_content_type)):
     """Обрабатывает запрос на индексацию документов."""
-    data = await parse_json_body(request)
-    document_name, documents = validate_indexing_request(data)
-
-    result = get_api_service().index_documents(document_name, documents)
+    result = get_api_service().index_documents(
+        payload.document_name,
+        [document.model_dump() for document in payload.documents],
+    )
     return JSONResponse(content=result)
