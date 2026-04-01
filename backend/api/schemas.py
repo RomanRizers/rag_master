@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.config import Config
+from backend.core.config import Config
 
 
 class SearchRequest(BaseModel):

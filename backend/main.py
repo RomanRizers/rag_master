@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 
-from app.api import api_router
-from app.core.error_handlers import register_error_handlers
-from app.core.logging import configure_logging
-from app.core.middleware import request_logging_middleware
+from backend.api import api_router
+from backend.core.error_handlers import register_error_handlers
+from backend.core.logging import configure_logging
+from backend.core.middleware import request_logging_middleware
 
 
 def create_app() -> FastAPI:

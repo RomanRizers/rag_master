@@ -3,8 +3,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.core.exceptions import StorageError, VectorizationError
-from app.main import create_app
+from backend.core.exceptions import StorageError, VectorizationError
+from backend.main import create_app
 
 
 class ApiErrorHandlingTestCase(unittest.TestCase):
@@ -14,7 +14,7 @@ class ApiErrorHandlingTestCase(unittest.TestCase):
         app = create_app()
         self.client = TestClient(app, raise_server_exceptions=False)
 
-    @patch("app.api.routes.get_api_service")
+    @patch("backend.api.routes.get_api_service")
     def test_maps_vectorization_error(self, get_api_service_mock):
         service = get_api_service_mock.return_value
         service.search_query.side_effect = VectorizationError(message="Vectorization failed")
@@ -26,7 +26,7 @@ class ApiErrorHandlingTestCase(unittest.TestCase):
             payload = response.json()
             self.assertEqual(payload["error"]["code"], "vectorization_error")
 
-    @patch("app.api.routes.get_api_service")
+    @patch("backend.api.routes.get_api_service")
     def test_maps_storage_error(self, get_api_service_mock):
         service = get_api_service_mock.return_value
         service.search_query.side_effect = StorageError(message="Storage failed")
@@ -38,7 +38,7 @@ class ApiErrorHandlingTestCase(unittest.TestCase):
             payload = response.json()
             self.assertEqual(payload["error"]["code"], "storage_error")
 
-    @patch("app.api.routes.get_api_service")
+    @patch("backend.api.routes.get_api_service")
     def test_maps_unexpected_error(self, get_api_service_mock):
         service = get_api_service_mock.return_value
         service.search_query.side_effect = RuntimeError("boom")

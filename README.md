@@ -5,7 +5,7 @@ FastAPI + Qdrant сервис поиска параграфов по векто�
 ## Архитектура
 
 - `frontend` — React SPA (Vite + TypeScript + React Query), отдается через Nginx
-- `fastapi-app` — backend API (FastAPI)
+- `backend-app` — backend API (FastAPI)
 - `qdrant` — векторная база
 
 Frontend и backend разделены по контейнерам.
@@ -30,7 +30,7 @@ Frontend и backend разделены по контейнерам.
 
 ```bash
 uv sync
-uv run uvicorn app.main:app --host 0.0.0.0 --port 5000
+uv run uvicorn backend.main:app --host 0.0.0.0 --port 5000
 ```
 
 ## Запуск всего решения через Docker Compose
@@ -54,12 +54,12 @@ export HF_TOKEN=hf_xxx
 docker compose up -d --build
 ```
 
-Токен читается из `.env` и прокидывается в `fastapi-app`.
+Токен читается из `.env` и прокидывается в `backend-app`.
 
 ## Перевекторизация данных
 
 ```bash
-cd app/embeddings
+cd backend/embeddings
 uv run dataset_loader.py
 uv run qdrant_uploader.py
 ```

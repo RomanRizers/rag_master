@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from app.infrastructure.qdrant.client import QdrantService
+from backend.infrastructure.qdrant.client import QdrantService
 
 
 class _Point:
@@ -17,7 +17,7 @@ class _QueryResponse:
 
 
 class QdrantClientCompatibilityTestCase(unittest.TestCase):
-    @patch("app.infrastructure.qdrant.client.qdrant_client.QdrantClient")
+    @patch("backend.infrastructure.qdrant.client.qdrant_client.QdrantClient")
     def test_search_uses_query_points_when_available(self, qdrant_client_mock):
         client = Mock()
         client.query_points.return_value = _QueryResponse([_Point("1", {"a": 1}, 0.9)])
@@ -29,7 +29,7 @@ class QdrantClientCompatibilityTestCase(unittest.TestCase):
         client.query_points.assert_called_once()
         self.assertEqual(results, [{"id": "1", "payload": {"a": 1}, "score": 0.9}])
 
-    @patch("app.infrastructure.qdrant.client.qdrant_client.QdrantClient")
+    @patch("backend.infrastructure.qdrant.client.qdrant_client.QdrantClient")
     def test_search_falls_back_to_legacy_search(self, qdrant_client_mock):
         class LegacyClient:
             def search(self, **kwargs):

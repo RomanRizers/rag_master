@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import Mock
 
-from app.core.exceptions import VectorizationError, StorageError
-from app.services.api_service import ApiService
+from backend.core.exceptions import VectorizationError, StorageError
+from backend.services.api_service import ApiService
 
 
 class ApiServiceTestCase(unittest.TestCase):

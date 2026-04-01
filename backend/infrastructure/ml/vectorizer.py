@@ -2,8 +2,8 @@ from transformers import AutoTokenizer, AutoModel
 import torch
 import numpy as np
 import torch.nn.functional as F
-from app.core.config import Config
-from app.core.exceptions import VectorizationError
+from backend.core.config import Config
+from backend.core.exceptions import VectorizationError
 import structlog
 
 logger = structlog.get_logger("vectorizer")

@@ -4,8 +4,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 import structlog
 
-from app.core.exceptions import ApiError
-from app.core.responses import error_response_payload
+from backend.core.exceptions import ApiError
+from backend.core.responses import error_response_payload
 
 logger = structlog.get_logger("errors")
 
