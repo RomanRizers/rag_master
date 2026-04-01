@@ -23,7 +23,10 @@ export async function searchParagraphs(payload: SearchRequest): Promise<SearchRe
     try {
       const errorPayload = (await response.json()) as ApiErrorResponse;
       throw new ApiRequestError(errorPayload.error.message || fallback, errorPayload.error.code);
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        throw error;
+      }
       throw new ApiRequestError(fallback);
     }
   }

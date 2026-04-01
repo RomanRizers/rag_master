@@ -70,8 +70,12 @@ export function SearchPage() {
     }
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    mediaQuery.addEventListener("change", applyTheme);
-    return () => mediaQuery.removeEventListener("change", applyTheme);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", applyTheme);
+      return () => mediaQuery.removeEventListener("change", applyTheme);
+    }
+    mediaQuery.addListener(applyTheme);
+    return () => mediaQuery.removeListener(applyTheme);
   }, [themeMode]);
 
   function switchLanguage(nextLanguage: Language) {
