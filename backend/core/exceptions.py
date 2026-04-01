@@ -44,3 +44,19 @@ class LLMError(ApiError):
 
     def __init__(self, message="LLM provider is unavailable", details=None, status_code=None, code=None):
         super().__init__(message=message, details=details, status_code=status_code, code=code)
+
+
+class ParsingError(ApiError):
+    status_code = 400
+    code = "parsing_failed"
+
+    def __init__(self, message="Document parsing failed", details=None, status_code=None, code=None):
+        super().__init__(message=message, details=details, status_code=status_code, code=code)
+
+
+class DocumentError(ApiError):
+    status_code = 404
+    code = "document_not_found"
+
+    def __init__(self, message="Document not found", details=None, status_code=None, code=None):
+        super().__init__(message=message, details=details, status_code=status_code, code=code)

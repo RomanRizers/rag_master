@@ -159,3 +159,44 @@ class ChatSendMessageResponse(BaseModel):
     session_id: str
     user_message: ChatMessageItem
     assistant_message: ChatMessageItem
+
+
+class DocumentUploadResponse(BaseModel):
+    document_id: str
+    file_name: str
+    mime_type: str
+    size_bytes: int
+    status: str
+    created_at: str
+
+
+class DocumentIndexResponse(BaseModel):
+    job_id: str
+    status: str
+    document_id: str
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    document_id: str
+    status: str
+    progress: int
+    error_code: str | None = None
+    error_message: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
+class DocumentListItem(BaseModel):
+    document_id: str
+    file_name: str
+    mime_type: str
+    size_bytes: int
+    status: str
+    source_name: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    created_at: str
+
+
+class DocumentListResponse(BaseModel):
+    documents: list[DocumentListItem]
