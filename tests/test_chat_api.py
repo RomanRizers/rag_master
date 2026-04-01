@@ -64,6 +64,20 @@ class ChatApiTestCase(unittest.TestCase):
         self.assertEqual(history_payload["messages"][1]["role"], "assistant")
 
     @patch("backend.api.routes.get_chat_service")
+    def test_list_sessions_returns_created_session(self, get_chat_service_mock):
+        get_chat_service_mock.return_value = self.chat_service
+
+        create_response = self.client.post("/api/chat/sessions")
+        self.assertEqual(create_response.status_code, 200)
+        session_id = create_response.json()["session_id"]
+
+        list_response = self.client.get("/api/chat/sessions")
+        self.assertEqual(list_response.status_code, 200)
+        sessions = list_response.json()["sessions"]
+        self.assertGreaterEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["session_id"], session_id)
+
+    @patch("backend.api.routes.get_chat_service")
     def test_missing_session_returns_404(self, get_chat_service_mock):
         get_chat_service_mock.return_value = self.chat_service
 

@@ -125,6 +125,17 @@ class ChatSessionCreateResponse(BaseModel):
     created_at: str
 
 
+class ChatSessionListItem(BaseModel):
+    session_id: str
+    created_at: str
+    message_count: int
+    last_message_at: str | None = None
+
+
+class ChatSessionListResponse(BaseModel):
+    sessions: list[ChatSessionListItem]
+
+
 class ChatSessionMessagesResponse(BaseModel):
     session_id: str
     messages: list[ChatMessageItem]

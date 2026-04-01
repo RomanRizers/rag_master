@@ -9,6 +9,7 @@ from backend.api.schemas import (
     ChatMessageRequest,
     ChatSendMessageResponse,
     ChatSessionCreateResponse,
+    ChatSessionListResponse,
     ChatSessionMessagesResponse,
     DocumentIndexResponse,
     DocumentListResponse,
@@ -169,6 +170,13 @@ async def list_jobs(status: str | None = None, document_id: str | None = None):
 async def create_chat_session():
     session = await run_in_threadpool(get_chat_service().create_session)
     response = ChatSessionCreateResponse.model_validate(session)
+    return JSONResponse(content=response.model_dump())
+
+
+@api_router.get("/api/chat/sessions")
+async def list_chat_sessions():
+    sessions = await run_in_threadpool(get_chat_service().list_sessions)
+    response = ChatSessionListResponse(sessions=sessions)
     return JSONResponse(content=response.model_dump())
 
 

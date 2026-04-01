@@ -20,6 +20,7 @@ class ChatService:
         self.llm_provider = llm_provider or create_llm_provider()
         self.retriever = retriever or _default_retriever
         self._sessions: dict[str, list[dict]] = {}
+        self._session_meta: dict[str, dict] = {}
         self._lock = RLock()
 
     def create_session(self) -> dict:
@@ -27,7 +28,25 @@ class ChatService:
         created_at = _now_iso()
         with self._lock:
             self._sessions[session_id] = []
+            self._session_meta[session_id] = {"session_id": session_id, "created_at": created_at}
         return {"session_id": session_id, "created_at": created_at}
+
+    def list_sessions(self) -> list[dict]:
+        with self._lock:
+            items = []
+            for session_id, meta in self._session_meta.items():
+                history = self._sessions.get(session_id, [])
+                last_created_at = history[-1]["created_at"] if history else None
+                items.append(
+                    {
+                        "session_id": session_id,
+                        "created_at": meta["created_at"],
+                        "message_count": len(history),
+                        "last_message_at": last_created_at,
+                    }
+                )
+        items.sort(key=lambda item: item["created_at"], reverse=True)
+        return items
 
     def get_messages(self, session_id: str) -> list[dict]:
         with self._lock:
