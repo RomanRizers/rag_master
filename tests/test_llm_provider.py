@@ -26,6 +26,20 @@ class _Response:
         return False
 
 
+class _StreamResponse:
+    def __init__(self, lines: list[str]):
+        self.lines = [line.encode("utf-8") for line in lines]
+
+    def __iter__(self):
+        return iter(self.lines)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 class LLMProviderFactoryTestCase(unittest.TestCase):
     @patch("backend.infrastructure.llm.provider.Config.LLM_PROVIDER", "openrouter")
     def test_factory_returns_openrouter_provider(self):
@@ -100,6 +114,24 @@ class OpenRouterProviderTestCase(unittest.TestCase):
         with self.assertRaises(LLMError) as context:
             provider.generate([{"role": "user", "content": "hi"}])
         self.assertEqual(context.exception.code, "llm_request_failed")
+
+    @patch("backend.infrastructure.llm.provider.Config.OPENROUTER_MODEL", "openrouter/test-model")
+    @patch("backend.infrastructure.llm.provider.Config.OPENROUTER_API_KEY", "token")
+    @patch("backend.infrastructure.llm.provider.Config.OPENROUTER_BASE_URL", "https://test.openrouter.ai/api/v1")
+    @patch(
+        "backend.infrastructure.llm.provider.request.urlopen",
+        return_value=_StreamResponse(
+            [
+                'data: {"choices":[{"delta":{"content":"hello "}}]}\n',
+                'data: {"choices":[{"delta":{"content":"world"}}]}\n',
+                "data: [DONE]\n",
+            ]
+        ),
+    )
+    def test_stream_chat_returns_delta_chunks(self, _urlopen):
+        provider = OpenRouterProvider()
+        chunks = list(provider.stream_chat([{"role": "user", "content": "hi"}]))
+        self.assertEqual(chunks, ["hello ", "world"])
 
 
 if __name__ == "__main__":
