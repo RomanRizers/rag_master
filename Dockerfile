@@ -14,7 +14,4 @@ COPY app /app/app
 
 EXPOSE 5000
 
-ENV FLASK_APP=app.app:create_app
-ENV FLASK_RUN_HOST=0.0.0.0
-
-CMD ["uv", "run", "flask", "run", "--host=0.0.0.0", "--port=5000"]
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5000"]

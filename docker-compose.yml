@@ -13,20 +13,18 @@ services:
     networks:
       - qdrant-network
 
-  flask-app:
+  fastapi-app:
     build: .
-    container_name: flask
+    container_name: fastapi
     ports:
       - "5000:5000"
     volumes:
       - .:/app 
     environment:
-      - FLASK_APP=app.app:create_app
-      - FLASK_RUN_HOST=0.0.0.0
       - UV_PROJECT_ENVIRONMENT=/opt/venv
     depends_on:
       - qdrant
-    command: uv run flask run --host=0.0.0.0 --port=5000
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 5000
     networks:
       - qdrant-network
 
