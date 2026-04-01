@@ -11,6 +11,12 @@ class ApiValidationTestCase(unittest.TestCase):
         app = create_app()
         self.client = TestClient(app)
 
+    def test_index_page_is_available(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/html", response.headers.get("content-type", ""))
+
     def test_search_rejects_non_json_content_type(self):
         response = self.client.post("/searching", data='{"query":"hello"}', headers={"content-type": "text/plain"})
 
