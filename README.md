@@ -23,8 +23,24 @@ git clone https://github.com/RomanRizers/gazprom_case
 cd gazprom_case
 ```
 
+### 2. Локальный запуск через uv
 
-### 2. Запуск с помощью Docker Compose
+Установите `uv`:
+
+```bash
+pip install uv
+```
+
+Синхронизируйте зависимости и запустите приложение:
+
+```bash
+uv sync
+uv run flask --app app.app:create_app run --host=0.0.0.0 --port=5000
+```
+
+После запуска сервис доступен по адресу `http://localhost:5000`.
+
+### 3. Запуск с помощью Docker Compose
 
 Для развертывания проекта с использованием docker-compose выполните следующую команду:
 
@@ -37,24 +53,25 @@ docker-compose up --build
 ![Запуск контейнеров](https://drive.google.com/uc?id=1JS7yxtlyXYSZMTorV818dfNoODXu4AJL)
 
 
-### 3. Переход к клиентской части
+### 4. Переход к клиентской части
 
 После завершения сборки проект будет доступен по ссылке `http://localhost:5000`
 
 
 
-### 4. Если хотите заново векторизовать данные и поместить в Qdrant (при запуске контейнеров,  готовая коллекция подтягивается автоматически):
-  - Создайте виртуальное окружение и активируйте его:
-    ```bash
-    python -m venv venv
-    source venv/Scripts/activate
-    ```
-  - Установите зависимости:
-    ```bash
-    pip install -r requirements.txt
-    ```
-  - Запустите `dataset_loader.py` (находится в app/embeddings) - векторизует код (ядра CUDA поддерживаются)
-  - Запустите `qdrant_uploader.py` (находится в app/embeddings) - создает новую коллекцию и добавляет датасет с векторизованным полем content
+### 5. Если хотите заново векторизовать данные и поместить в Qdrant
+
+При запуске контейнеров готовая коллекция подтягивается автоматически. Для ручной перевекторизации:
+
+```bash
+cd app/embeddings
+uv run dataset_loader.py
+uv run qdrant_uploader.py
+```
+
+Скрипты:
+- `dataset_loader.py` — векторизует датасет (CUDA поддерживается при наличии подходящей сборки `torch`).
+- `qdrant_uploader.py` — создает коллекцию и загружает векторы в Qdrant.
     
 
 ## Документация API
@@ -186,4 +203,3 @@ Value: application/json
 ![до](https://drive.google.com/uc?id=1CtM5O2wYpt4uyP6X1rwpDApL9c36tInF)
 после:
 ![после](https://drive.google.com/uc?id=1UWuVDT6mjXiianEucE75DKNxF_YBk4HK)
-
