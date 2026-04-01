@@ -198,6 +198,10 @@ class JobStatusResponse(BaseModel):
     finished_at: str | None = None
 
 
+class JobListResponse(BaseModel):
+    jobs: list[JobStatusResponse]
+
+
 class DocumentListItem(BaseModel):
     document_id: str
     file_name: str
