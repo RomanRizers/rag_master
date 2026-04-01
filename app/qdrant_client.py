@@ -3,6 +3,9 @@ import qdrant_client
 from app.config import Config
 from app.exceptions import StorageError
 import uuid
+import structlog
+
+logger = structlog.get_logger("qdrant")
 
 
 class QdrantService:
@@ -10,6 +13,7 @@ class QdrantService:
         """Инициализирует подключение к Qdrant и задает имя коллекции."""
         self.client = qdrant_client.QdrantClient(url=Config.QDRANT_URL)
         self.collection_name = Config.COLLECTION_NAME
+        logger.info("qdrant_client_initialized", qdrant_url=Config.QDRANT_URL, collection_name=self.collection_name)
 
     def search(self, query_vector, top_k, keywords=None):
         """Выполняет поиск в коллекции с использованием вектора запроса и фильтрации."""
@@ -28,6 +32,7 @@ class QdrantService:
                     )
                 ]
             )
+        logger.info("qdrant_search_started", top_k=top_k, keywords_count=len(keywords) if keywords else 0)
 
         try:
             search_result = self.client.search(
@@ -38,6 +43,7 @@ class QdrantService:
             )
         except Exception as error:
             raise StorageError(message="Qdrant search failed", details={"reason": str(error)}) from error
+        logger.info("qdrant_search_finished", results_count=len(search_result))
 
         return [
             {
@@ -51,6 +57,13 @@ class QdrantService:
     def index_document(self, document_name, content_vector, content, keywords, dataframe=None):
         """Индексирует документ в коллекции Qdrant."""
         document_id = str(uuid.uuid4())
+        logger.info(
+            "qdrant_index_started",
+            document_id=document_id,
+            document_name=document_name,
+            keywords_count=len(keywords) if keywords else 0,
+            has_dataframe=dataframe is not None,
+        )
 
         if keywords:
             keywords = [kw.lower() for kw in keywords]
@@ -73,3 +86,4 @@ class QdrantService:
             )
         except Exception as error:
             raise StorageError(message="Qdrant upsert failed", details={"reason": str(error)}) from error
+        logger.info("qdrant_index_finished", document_id=document_id)

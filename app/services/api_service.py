@@ -1,6 +1,9 @@
 from app.qdrant_client import QdrantService
 from app.vectorizer import TextVectorizer
 from app.exceptions import VectorizationError, StorageError
+import structlog
+
+logger = structlog.get_logger("api_service")
 
 class ApiService:
     def __init__(self, qdrant_service=None, vectorizer=None):
@@ -11,6 +14,12 @@ class ApiService:
         """Выполняет поиск по запросу и возвращает результаты."""
         if keywords:
             keywords = [kw.lower() for kw in keywords]
+        logger.info(
+            "search_query_started",
+            query_length=len(query),
+            top_k=top_k,
+            keywords_count=len(keywords) if keywords else 0,
+        )
 
         try:
             query_vector = self.vectorizer.vectorize_text(query)
@@ -26,6 +35,8 @@ class ApiService:
         except Exception as error:
             raise StorageError(details={"reason": str(error)}) from error
 
+        logger.info("search_query_finished", results_count=len(search_results))
+
         return {
             "results": search_results,
             "total": len(search_results)
@@ -33,6 +44,11 @@ class ApiService:
 
     def index_documents(self, document_name: str, documents: list):
         """Индексирует документы в Qdrant."""
+        logger.info(
+            "index_documents_started",
+            document_name=document_name,
+            documents_count=len(documents),
+        )
         for index, document in enumerate(documents):
             content = document.get('content')
             keywords = document.get('keywords', [])
@@ -64,4 +80,5 @@ class ApiService:
                     message="Storage failed while indexing",
                     details={"index": index, "reason": str(error)},
                 ) from error
+        logger.info("index_documents_finished", document_name=document_name, documents_count=len(documents))
         return {"status": "success", "message": f"{len(documents)} documents indexed."}
