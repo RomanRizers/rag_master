@@ -315,7 +315,7 @@
 - `E1`: DB + S3 + базовые модели документов/джоб — `todo`
 - `E2`: Upload API + storage adapter — `done`
 - `E3`: Worker + parsing + chunking — `in_progress`
-- `E4`: Embedding + Qdrant upsert + job completion — `todo`
+- `E4`: Embedding + Qdrant upsert + job completion — `in_progress`
 - `E5`: Chat sessions/messages API + retrieval pipeline + rerank — `in_progress`
 - `E6`: LLM provider + streaming SSE + citations — `done`
 - `E7`: Frontend documents/chat UX — `todo`
@@ -354,6 +354,8 @@
 | done | 2026-04-02 | S3 storage adapter (`boto3`) + factory switch `local|s3` | `f4a5f95` |
 | done | 2026-04-02 | Тесты storage adapter для `s3` и storage factory | `0ca4885` |
 | done | 2026-04-02 | MinIO сервис в compose и S3 env wiring | `2455d8f` |
+| done | 2026-04-02 | metadata чанков в indexing pipeline и Qdrant payload | `64549c8` |
+| done | 2026-04-02 | Тесты metadata validation/forwarding в indexing | `f88fc37` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
