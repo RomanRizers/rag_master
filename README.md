@@ -22,6 +22,9 @@ Frontend и backend разделены по контейнерам.
 
 - `POST /api/searching` — основной endpoint поиска
 - `POST /api/indexing` — основной endpoint индексации
+- `POST /api/chat/sessions` — создать chat-сессию
+- `POST /api/chat/sessions/{session_id}/messages` — отправить сообщение в сессию
+- `GET /api/chat/sessions/{session_id}/messages` — получить историю сообщений
 
 ### Legacy compatibility
 
@@ -61,6 +64,24 @@ docker compose up -d --build
 ```
 
 Токен читается из `.env` и прокидывается в `backend-app`.
+
+## LLM provider (OpenRouter/local)
+
+```bash
+LLM_PROVIDER=openrouter
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_API_KEY=...
+OPENROUTER_MODEL=...
+```
+
+Для локальной модели (OpenAI-compatible gateway):
+
+```bash
+LLM_PROVIDER=local
+LOCAL_LLM_BASE_URL=http://localhost:11434/v1
+LOCAL_LLM_MODEL=...
+LOCAL_LLM_API_KEY=
+```
 
 ## Перевекторизация данных
 
