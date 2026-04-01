@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/i18n.ts","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/api/client.ts","./src/components/searchpage.tsx","./src/utils/score.test.ts","./src/utils/score.ts"],"version":"5.9.3"}
