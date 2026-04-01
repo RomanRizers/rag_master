@@ -1,6 +1,6 @@
 @font-face {
     font-family: 'Thicker-Regular';
-    src: url('..\fonts\Thicker-Regular-TRIAL.ttf') format('truetype');
+    src: url('../fonts/Thicker-Regular-TRIAL.ttf') format('truetype');
 }
 
 body {
