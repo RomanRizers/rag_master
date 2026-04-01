@@ -359,6 +359,8 @@
 | done | 2026-04-02 | Retry policy и attempt tracking для ingestion jobs | `43eadc1` |
 | done | 2026-04-02 | Unit-тесты retry-поведения ingestion jobs | `4f20889` |
 | done | 2026-04-02 | Hybrid rerank + context budget в chat pipeline + unit-тесты | `e75edcf` |
+| done | 2026-04-02 | README/example.env: env настройки rerank и context budget | `00b1c82` |
+| done | 2026-04-02 | `GET /api/jobs` + filters (`status`, `document_id`) + API tests | `35a8025` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
