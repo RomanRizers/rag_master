@@ -1,20 +1,26 @@
+import json
+
 from app.exceptions import ValidationError
 
 
-def parse_json_body(request):
-    if not request.is_json:
+async def parse_json_body(request):
+    content_type = request.headers.get("content-type", "")
+    if "application/json" not in content_type:
         raise ValidationError(
             message="Content-Type must be application/json",
             code="invalid_content_type",
             status_code=415,
         )
 
-    data = request.get_json(silent=True)
-    if data is None:
+    try:
+        data = await request.json()
+    except json.JSONDecodeError as error:
         raise ValidationError(
             message="Request body must contain valid JSON",
             code="invalid_json",
-        )
+            details={"reason": str(error)},
+        ) from error
+
     if not isinstance(data, dict):
         raise ValidationError(
             message="JSON body must be an object",
