@@ -36,3 +36,11 @@ class StorageError(ApiError):
 
     def __init__(self, message="Storage operation failed", details=None, status_code=None, code=None):
         super().__init__(message=message, details=details, status_code=status_code, code=code)
+
+
+class LLMError(ApiError):
+    status_code = 503
+    code = "llm_unavailable"
+
+    def __init__(self, message="LLM provider is unavailable", details=None, status_code=None, code=None):
+        super().__init__(message=message, details=details, status_code=status_code, code=code)
