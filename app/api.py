@@ -1,11 +1,13 @@
-from flask import request, jsonify, render_template
-from app.services.api_service import ApiService
-from flask import Blueprint
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
+
 from app.config import Config
-from app.validation import parse_json_body, validate_search_request, validate_indexing_request
+from app.services.api_service import ApiService
+from app.validation import parse_json_body, validate_indexing_request, validate_search_request
 
-api_bp = Blueprint('api', __name__)
-
+api_router = APIRouter()
+templates = Jinja2Templates(directory="app/templates")
 api_service = None
 
 
@@ -15,15 +17,17 @@ def get_api_service():
         api_service = ApiService()
     return api_service
 
-@api_bp.route('/', methods=['GET'])
-def index():
-    """Возвращает HTML-файл фронтенда."""
-    return render_template('index.html')
 
-@api_bp.route('/searching', methods=['POST'])
-def search():
+@api_router.get("/")
+def index(request: Request):
+    """Возвращает HTML-файл фронтенда."""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+
+@api_router.post("/searching")
+async def search(request: Request):
     """Обрабатывает запрос поиска."""
-    data = parse_json_body(request)
+    data = await parse_json_body(request)
     query, top_k, keywords = validate_search_request(
         data,
         top_k_default=Config.TOP_K_DEFAULT,
@@ -31,14 +35,14 @@ def search():
     )
 
     results = get_api_service().search_query(query, top_k, keywords)
-    return jsonify(results)
+    return JSONResponse(content=results)
 
 
-@api_bp.route('/indexing', methods=['POST'])
-def indexing():
+@api_router.post("/indexing")
+async def indexing(request: Request):
     """Обрабатывает запрос на индексацию документов."""
-    data = parse_json_body(request)
+    data = await parse_json_body(request)
     document_name, documents = validate_indexing_request(data)
 
     result = get_api_service().index_documents(document_name, documents)
-    return jsonify(result)
+    return JSONResponse(content=result)
