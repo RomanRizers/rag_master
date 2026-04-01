@@ -64,8 +64,28 @@ uv run dataset_loader.py
 uv run qdrant_uploader.py
 ```
 
-## Тесты backend
+## Тесты backend (Go)
 
 ```bash
-uv run python -m unittest discover -s tests
+go test ./tests -v
+```
+
+По умолчанию Go-тесты обращаются к `http://localhost:5001`.
+Если backend поднят на другом адресе, укажи:
+
+```bash
+RAG_API_BASE_URL=http://localhost:5001 go test ./tests -v
+```
+
+Медленный сквозной E2E-кейс (индексация + поиск) выключен по умолчанию:
+
+```bash
+RAG_RUN_SLOW_E2E=1 go test ./tests -v -run TestOptionalIndexAndSearchFlow
+```
+
+## Тесты frontend
+
+```bash
+cd frontend
+npm test
 ```
