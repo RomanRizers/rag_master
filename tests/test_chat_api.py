@@ -71,6 +71,26 @@ class ChatApiTestCase(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["error"]["code"], "session_not_found")
 
+    @patch("backend.api.routes.get_chat_service")
+    def test_stream_endpoint_returns_sse_events(self, get_chat_service_mock):
+        get_chat_service_mock.return_value = self.chat_service
+
+        create_response = self.client.post("/api/chat/sessions")
+        session_id = create_response.json()["session_id"]
+
+        with self.client.stream(
+            "POST",
+            f"/api/chat/sessions/{session_id}/messages/stream",
+            json={"message": "hello"},
+        ) as response:
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("text/event-stream", response.headers.get("content-type", ""))
+            raw = response.read().decode("utf-8")
+
+        self.assertIn("event: delta", raw)
+        self.assertIn("event: citations", raw)
+        self.assertIn("event: done", raw)
+
 
 if __name__ == "__main__":
     unittest.main()
