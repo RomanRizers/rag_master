@@ -11,6 +11,10 @@ class _FakeLLMProvider:
     def generate(self, messages, temperature=0.2, max_tokens=700):
         return "assistant reply"
 
+    def stream_chat(self, messages, temperature=0.2, max_tokens=700):
+        yield "assistant "
+        yield "reply"
+
 
 def _fake_retriever(query, top_k, keywords):
     return {

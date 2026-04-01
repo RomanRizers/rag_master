@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Iterator
 from threading import RLock
 from uuid import uuid4
 
@@ -62,14 +63,7 @@ class ChatService:
             context = _build_context(search_results)
             citations = _build_citations(search_results)
 
-            llm_messages = [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}]
-            llm_messages.extend(
-                {"role": item["role"], "content": item["content"]}
-                for item in history
-                if item["role"] in {"user", "assistant"}
-            )
-            if context:
-                llm_messages.append({"role": "system", "content": f"Контекст для ответа:\n{context}"})
+            llm_messages = _build_llm_messages(history, context)
 
             assistant_text = self.llm_provider.generate(llm_messages)
             assistant_message = {
@@ -82,6 +76,57 @@ class ChatService:
             history.append(assistant_message)
 
             return user_message, assistant_message
+
+    def stream_message(
+        self,
+        session_id: str,
+        message: str,
+        top_k: int | None = None,
+        keywords: list[str] | None = None,
+    ) -> tuple[dict, list[dict], Iterator[str]]:
+        clean_message = message.strip()
+        with self._lock:
+            history = self._sessions.get(session_id)
+            if history is None:
+                self._raise_session_not_found(session_id)
+
+            user_message = {
+                "id": str(uuid4()),
+                "role": "user",
+                "content": clean_message,
+                "citations": [],
+                "created_at": _now_iso(),
+            }
+            history.append(user_message)
+            llm_history = list(history)
+
+        effective_top_k = top_k or Config.TOP_K_DEFAULT
+        retrieval = self.retriever(clean_message, effective_top_k, keywords)
+        search_results = retrieval.get("results", [])
+        context = _build_context(search_results)
+        citations = _build_citations(search_results)
+        llm_messages = _build_llm_messages(llm_history, context)
+
+        def token_stream():
+            chunks = []
+            for delta in self.llm_provider.stream_chat(llm_messages):
+                chunks.append(delta)
+                yield delta
+
+            assistant_message = {
+                "id": str(uuid4()),
+                "role": "assistant",
+                "content": "".join(chunks).strip(),
+                "citations": citations,
+                "created_at": _now_iso(),
+            }
+            with self._lock:
+                latest_history = self._sessions.get(session_id)
+                if latest_history is None:
+                    self._raise_session_not_found(session_id)
+                latest_history.append(assistant_message)
+
+        return user_message, citations, token_stream()
 
     @staticmethod
     def _raise_session_not_found(session_id: str):
@@ -109,6 +154,18 @@ def _build_context(search_results: list[dict]) -> str:
             continue
         context_parts.append(f"[{index}] {content}")
     return "\n\n".join(context_parts)
+
+
+def _build_llm_messages(history: list[dict], context: str) -> list[dict[str, str]]:
+    llm_messages = [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}]
+    llm_messages.extend(
+        {"role": item["role"], "content": item["content"]}
+        for item in history
+        if item["role"] in {"user", "assistant"}
+    )
+    if context:
+        llm_messages.append({"role": "system", "content": f"Контекст для ответа:\n{context}"})
+    return llm_messages
 
 
 def _build_citations(search_results: list[dict]) -> list[dict]:

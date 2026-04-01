@@ -99,8 +99,8 @@ async def send_chat_message(payload: ChatMessageRequest, session_id: str):
 
 @api_router.post("/api/chat/sessions/{session_id}/messages/stream")
 async def stream_chat_message(payload: ChatMessageRequest, session_id: str):
-    user_message, assistant_message = await run_in_threadpool(
-        get_chat_service().send_message,
+    user_message, citations, token_stream = await run_in_threadpool(
+        get_chat_service().stream_message,
         session_id,
         payload.message,
         payload.top_k,
@@ -108,18 +108,14 @@ async def stream_chat_message(payload: ChatMessageRequest, session_id: str):
     )
 
     def event_stream():
-        content = assistant_message["content"] or ""
-        chunk_size = 32
-        for index in range(0, len(content), chunk_size):
-            chunk = content[index : index + chunk_size]
+        for chunk in token_stream:
             yield _sse_event("delta", {"text": chunk})
-        yield _sse_event("citations", {"items": assistant_message.get("citations", [])})
+        yield _sse_event("citations", {"items": citations})
         yield _sse_event(
             "done",
             {
                 "session_id": session_id,
                 "user_message_id": user_message["id"],
-                "assistant_message_id": assistant_message["id"],
             },
         )
 
