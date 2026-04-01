@@ -337,6 +337,7 @@
 | done | 2026-04-02 | Реализация провайдера LLM и фабрики выбора | `9b5babd` |
 | done | 2026-04-02 | Retrieval-контекст и citations в chat-ответах | `280a810` |
 | done | 2026-04-02 | SSE streaming endpoint для chat (`/messages/stream`) + API-тест | `2101314` |
+| done | 2026-04-02 | Реальный LLM streaming (`stream_chat`) и интеграция в chat endpoint | `446329e` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
