@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from app.api.dependencies import ensure_json_content_type
-from app.api.schemas import IndexingRequest, SearchRequest
-from app.services.api_service import ApiService
+from backend.api.dependencies import ensure_json_content_type
+from backend.api.schemas import IndexingRequest, SearchRequest
+from backend.services.api_service import ApiService
 
 api_router = APIRouter()
 api_service = None

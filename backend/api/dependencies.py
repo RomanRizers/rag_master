@@ -1,6 +1,6 @@
 from fastapi import Request
 
-from app.core.exceptions import ValidationError
+from backend.core.exceptions import ValidationError
 
 
 def ensure_json_content_type(request: Request):

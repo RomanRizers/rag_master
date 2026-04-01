@@ -10,8 +10,8 @@ ENV UV_LINK_MODE=copy
 COPY pyproject.toml uv.lock /app/
 RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev
 
-COPY app /app/app
+COPY backend /app/backend
 
 EXPOSE 5000
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["uv", "run", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "5000"]
