@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -10,15 +10,24 @@ from backend.api.schemas import (
     ChatSendMessageResponse,
     ChatSessionCreateResponse,
     ChatSessionMessagesResponse,
+    DocumentIndexResponse,
+    DocumentListResponse,
+    DocumentUploadResponse,
     IndexingRequest,
+    JobStatusResponse,
     SearchRequest,
 )
+from backend.core.exceptions import ValidationError
 from backend.services.api_service import ApiService
 from backend.services.chat_service import ChatService
+from backend.services.document_service import DocumentService
+from backend.services.ingestion_service import IngestionService
 
 api_router = APIRouter()
 api_service = None
 chat_service = None
+document_service = None
+ingestion_service = None
 
 
 def get_api_service():
@@ -33,6 +42,23 @@ def get_chat_service():
     if chat_service is None:
         chat_service = ChatService()
     return chat_service
+
+
+def get_document_service():
+    global document_service
+    if document_service is None:
+        document_service = DocumentService()
+    return document_service
+
+
+def get_ingestion_service():
+    global ingestion_service
+    if ingestion_service is None:
+        ingestion_service = IngestionService(
+            document_service=get_document_service(),
+            api_service=get_api_service(),
+        )
+    return ingestion_service
 
 
 @api_router.get("/")
@@ -64,6 +90,49 @@ async def indexing(payload: IndexingRequest, _: None = Depends(ensure_json_conte
         [document.model_dump() for document in payload.documents],
     )
     return JSONResponse(content=result)
+
+
+@api_router.get("/api/documents")
+async def list_documents():
+    items = await run_in_threadpool(get_document_service().list_documents)
+    response = DocumentListResponse(documents=items)
+    return JSONResponse(content=response.model_dump())
+
+
+@api_router.post("/api/documents/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    source_name: str | None = Form(None),
+    tags: list[str] | None = Form(None),
+):
+    content = await file.read()
+    if not content:
+        raise ValidationError(message="Uploaded file is empty", code="empty_file")
+
+    document = await run_in_threadpool(
+        get_document_service().create_document,
+        file.filename or "document",
+        file.content_type or "application/octet-stream",
+        content,
+        source_name,
+        tags,
+    )
+    response = DocumentUploadResponse.model_validate(document)
+    return JSONResponse(content=response.model_dump(), status_code=201)
+
+
+@api_router.post("/api/documents/{document_id}/index")
+async def index_document(document_id: str):
+    job = await run_in_threadpool(get_ingestion_service().start_indexing, document_id)
+    response = DocumentIndexResponse.model_validate(job)
+    return JSONResponse(content=response.model_dump(), status_code=202)
+
+
+@api_router.get("/api/jobs/{job_id}")
+async def get_job_status(job_id: str):
+    job = await run_in_threadpool(get_ingestion_service().get_job, job_id)
+    response = JobStatusResponse.model_validate(job)
+    return JSONResponse(content=response.model_dump())
 
 
 @api_router.post("/api/chat/sessions")
