@@ -1,10 +1,11 @@
 [project]
 name = "rag-master"
 version = "0.1.0"
-description = "Paragraph search service based on Flask + Qdrant + E5 embeddings"
+description = "Paragraph search service based on FastAPI + Qdrant + E5 embeddings"
 requires-python = ">=3.11"
 dependencies = [
-    "flask",
+    "fastapi",
+    "jinja2",
     "pandas",
     "qdrant-client",
     "torch",
@@ -12,6 +13,7 @@ dependencies = [
     "torchvision",
     "tqdm",
     "transformers",
+    "uvicorn",
 ]
 
 [tool.uv]
