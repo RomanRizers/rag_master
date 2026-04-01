@@ -1,6 +1,6 @@
-from app.qdrant_client import QdrantService
-from app.vectorizer import TextVectorizer
-from app.exceptions import VectorizationError, StorageError
+from app.core.exceptions import StorageError, VectorizationError
+from app.infrastructure.ml.vectorizer import TextVectorizer
+from app.infrastructure.qdrant.client import QdrantService
 import structlog
 
 logger = structlog.get_logger("api_service")

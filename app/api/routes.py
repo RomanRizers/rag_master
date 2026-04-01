@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from app.schemas import IndexingRequest, SearchRequest
+from app.api.dependencies import ensure_json_content_type
+from app.api.schemas import IndexingRequest, SearchRequest
 from app.services.api_service import ApiService
-from app.validation import ensure_json_content_type
 
 api_router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
