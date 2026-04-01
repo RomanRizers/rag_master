@@ -313,8 +313,8 @@
 
 ### Статусы этапов
 - `E1`: DB + S3 + базовые модели документов/джоб — `todo`
-- `E2`: Upload API + storage adapter — `todo`
-- `E3`: Worker + parsing + chunking — `todo`
+- `E2`: Upload API + storage adapter — `in_progress`
+- `E3`: Worker + parsing + chunking — `in_progress`
 - `E4`: Embedding + Qdrant upsert + job completion — `todo`
 - `E5`: Chat sessions/messages API + retrieval pipeline + rerank — `in_progress`
 - `E6`: LLM provider + streaming SSE + citations — `done`
@@ -338,6 +338,11 @@
 | done | 2026-04-02 | Retrieval-контекст и citations в chat-ответах | `280a810` |
 | done | 2026-04-02 | SSE streaming endpoint для chat (`/messages/stream`) + API-тест | `2101314` |
 | done | 2026-04-02 | Реальный LLM streaming (`stream_chat`) и интеграция в chat endpoint | `446329e` |
+| done | 2026-04-02 | Схемы API документов/джоб и ingestion ошибки | `c2355cf` |
+| done | 2026-04-02 | Parser/chunker primitives (txt/docx/pdf optional) | `5ab6f24` |
+| done | 2026-04-02 | In-memory сервисы документов и ingestion jobs | `d220c8c` |
+| done | 2026-04-02 | Upload/list/index/job endpoints + multipart dependency | `063cdf6` |
+| done | 2026-04-02 | API тесты ingestion endpoints | `818e98e` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:

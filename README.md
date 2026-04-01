@@ -22,8 +22,13 @@ Frontend и backend разделены по контейнерам.
 
 - `POST /api/searching` — основной endpoint поиска
 - `POST /api/indexing` — основной endpoint индексации
+- `POST /api/documents/upload` — загрузить документ (multipart)
+- `GET /api/documents` — список загруженных документов
+- `POST /api/documents/{document_id}/index` — запустить job индексации
+- `GET /api/jobs/{job_id}` — получить статус job индексации
 - `POST /api/chat/sessions` — создать chat-сессию
 - `POST /api/chat/sessions/{session_id}/messages` — отправить сообщение в сессию
+- `POST /api/chat/sessions/{session_id}/messages/stream` — SSE-streaming ответа
 - `GET /api/chat/sessions/{session_id}/messages` — получить историю сообщений
 
 ### Legacy compatibility
@@ -82,6 +87,11 @@ LOCAL_LLM_BASE_URL=http://localhost:11434/v1
 LOCAL_LLM_MODEL=...
 LOCAL_LLM_API_KEY=
 ```
+
+## Parser зависимости
+
+- `python-multipart` уже включен и нужен для `multipart/form-data` upload.
+- Для PDF-парсинга нужен `pypdf` (на текущем этапе опционально, будет включен в следующем шаге ingestion hardening).
 
 ## Перевекторизация данных
 
