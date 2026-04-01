@@ -92,3 +92,46 @@ class IndexingRequest(BaseModel):
         if not isinstance(value, list) or len(value) == 0:
             raise ValueError("No documents to index")
         return value
+
+
+class ChatCitation(BaseModel):
+    document_id: str | None = None
+    document_name: str | None = None
+    chunk_id: str | None = None
+    page: int | None = None
+    snippet: str | None = None
+
+
+class ChatMessageItem(BaseModel):
+    id: str
+    role: str
+    content: str
+    citations: list[ChatCitation] = Field(default_factory=list)
+    created_at: str
+
+
+class ChatSessionCreateResponse(BaseModel):
+    session_id: str
+    created_at: str
+
+
+class ChatSessionMessagesResponse(BaseModel):
+    session_id: str
+    messages: list[ChatMessageItem]
+
+
+class ChatMessageRequest(BaseModel):
+    message: str
+
+    @field_validator("message", mode="before")
+    @classmethod
+    def validate_message(cls, value):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Message is required")
+        return value.strip()
+
+
+class ChatSendMessageResponse(BaseModel):
+    session_id: str
+    user_message: ChatMessageItem
+    assistant_message: ChatMessageItem
