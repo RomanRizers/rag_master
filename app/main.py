@@ -2,9 +2,9 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.api import api_router
-from app.error_handlers import register_error_handlers
-from app.logging_config import configure_logging
-from app.middleware import request_logging_middleware
+from app.core.error_handlers import register_error_handlers
+from app.core.logging import configure_logging
+from app.core.middleware import request_logging_middleware
 
 
 def create_app() -> FastAPI:

@@ -1,7 +1,7 @@
 from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchAny
 import qdrant_client
-from app.config import Config
-from app.exceptions import StorageError
+from app.core.config import Config
+from app.core.exceptions import StorageError
 import uuid
 import structlog
 
