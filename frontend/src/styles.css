@@ -1,0 +1,149 @@
+:root {
+  --bg: #f2f5f9;
+  --surface: #ffffff;
+  --ink: #0d2a45;
+  --muted: #4f6b85;
+  --brand: #106ebe;
+  --brand-hover: #0c5ca2;
+  --border: #d2dbe6;
+  --danger: #b42318;
+  --shadow: 0 10px 24px rgba(16, 110, 190, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top right, #e1efff 0%, var(--bg) 45%, #eef3f8 100%);
+  color: var(--ink);
+  font-family: "Segoe UI", "Inter", "Roboto", "Helvetica Neue", Arial, sans-serif;
+}
+
+.page {
+  min-height: 100vh;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.header h1 {
+  margin: 18px 0 0;
+  font-size: clamp(30px, 5vw, 64px);
+  line-height: 1.05;
+  color: var(--brand);
+}
+
+.lang-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.lang-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.lang-btn.active {
+  background: var(--brand);
+  color: #fff;
+}
+
+.content {
+  margin-top: 26px;
+}
+
+.search-form {
+  display: grid;
+  grid-template-columns: 1fr 90px;
+  gap: 12px;
+}
+
+.search-form input,
+.search-form button {
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  font-size: 18px;
+  min-height: 54px;
+}
+
+.search-form input {
+  padding: 0 14px;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.search-form input:focus {
+  outline: 2px solid #74b6ff;
+  outline-offset: 1px;
+}
+
+.search-form button {
+  grid-column: 1 / -1;
+  border: 0;
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.search-form button:hover {
+  background: var(--brand-hover);
+}
+
+.search-form button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.status {
+  margin-top: 18px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.status.error {
+  color: var(--danger);
+}
+
+.results {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.card p {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+.card p:last-child {
+  margin-bottom: 0;
+}
+
+.card strong {
+  color: #114a7a;
+}
+
+@media (max-width: 640px) {
+  .search-form {
+    grid-template-columns: 1fr;
+  }
+}
