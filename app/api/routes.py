@@ -21,7 +21,7 @@ def get_api_service():
 @api_router.get("/")
 def index(request: Request):
     """Возвращает HTML-файл фронтенда."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 
 @api_router.post("/searching")
