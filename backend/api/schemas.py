@@ -220,6 +220,18 @@ class DocumentIndexStatsResponse(BaseModel):
     latest_job: JobStatusResponse | None = None
 
 
+class OrphanCleanupRequest(BaseModel):
+    dry_run: bool = True
+
+
+class OrphanCleanupResponse(BaseModel):
+    dry_run: bool
+    indexed_documents_count: int
+    existing_documents_count: int
+    orphan_document_ids: list[str]
+    deleted_documents_count: int
+
+
 class DocumentListItem(BaseModel):
     document_id: str
     file_name: str

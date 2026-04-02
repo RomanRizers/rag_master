@@ -140,3 +140,36 @@ class QdrantService:
         count = int(getattr(response, "count", 0))
         logger.info("qdrant_count_document_chunks_finished", document_id=document_id, chunks_count=count)
         return count
+
+    def list_indexed_document_ids(self, batch_size: int = 256) -> list[str]:
+        logger.info("qdrant_list_indexed_document_ids_started", batch_size=batch_size)
+        if batch_size < 1:
+            batch_size = 1
+
+        ids: set[str] = set()
+        offset = None
+        try:
+            while True:
+                points, next_offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=batch_size,
+                    offset=offset,
+                    with_payload=["document_id"],
+                    with_vectors=False,
+                )
+                for point in points:
+                    payload = getattr(point, "payload", None) or {}
+                    document_id = payload.get("document_id")
+                    if isinstance(document_id, str) and document_id:
+                        ids.add(document_id)
+                if next_offset is None:
+                    break
+                if next_offset == offset:
+                    break
+                offset = next_offset
+        except Exception as error:
+            raise StorageError(message="Qdrant list ids failed", details={"reason": str(error)}) from error
+
+        result = sorted(ids)
+        logger.info("qdrant_list_indexed_document_ids_finished", documents_count=len(result))
+        return result

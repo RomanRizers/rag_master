@@ -18,6 +18,8 @@ from backend.api.schemas import (
     IndexingRequest,
     JobStatusResponse,
     JobListResponse,
+    OrphanCleanupRequest,
+    OrphanCleanupResponse,
     SearchRequest,
 )
 from backend.core.exceptions import ValidationError
@@ -178,6 +180,20 @@ async def index_document(request: Request, document_id: str):
 async def get_document_index_stats(request: Request, document_id: str):
     stats = await run_in_threadpool(get_ingestion_service(request).get_document_index_stats, document_id)
     response = DocumentIndexStatsResponse.model_validate(stats)
+    return JSONResponse(content=response.model_dump())
+
+
+@api_router.post("/api/admin/index/orphans/cleanup")
+async def cleanup_orphan_index_chunks(
+    request: Request,
+    payload: OrphanCleanupRequest,
+    _: None = Depends(ensure_json_content_type),
+):
+    result = await run_in_threadpool(
+        get_ingestion_service(request).cleanup_orphan_chunks,
+        payload.dry_run,
+    )
+    response = OrphanCleanupResponse.model_validate(result)
     return JSONResponse(content=response.model_dump())
 
 
