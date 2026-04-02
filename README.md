@@ -33,8 +33,8 @@ Frontend и backend разделены по контейнерам.
 - `GET /api/jobs/{job_id}` — получить статус job индексации
 - `POST /api/chat/sessions` — создать chat-сессию
 - `GET /api/chat/sessions` — список chat-сессий
-- `POST /api/chat/sessions/{session_id}/messages` — отправить сообщение в сессию
-- `POST /api/chat/sessions/{session_id}/messages/stream` — SSE-streaming ответа
+- `POST /api/chat/sessions/{session_id}/messages` — отправить сообщение в сессию (`filters.document_names[]`, `filters.tags[]` optional)
+- `POST /api/chat/sessions/{session_id}/messages/stream` — SSE-streaming ответа (поддерживает те же `filters`)
 - `GET /api/chat/sessions/{session_id}/messages` — получить историю сообщений
 
 Для `upload/index/chat` включен in-memory rate limiting; при превышении вернется `429` и код `rate_limited`.
