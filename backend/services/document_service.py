@@ -5,7 +5,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from backend.core.config import Config
 from backend.core.exceptions import DocumentError
+from backend.core.exceptions import ValidationError
 from backend.ingestion.file_types import resolve_upload_mime_type
 from backend.infrastructure.document_store import DocumentStore, create_document_store
 from backend.infrastructure.storage import StorageAdapter, create_storage_adapter
@@ -49,6 +51,16 @@ class DocumentService:
         source_name: str | None = None,
         tags: list[str] | None = None,
     ) -> dict:
+        if len(content_bytes) > Config.MAX_UPLOAD_SIZE_BYTES:
+            raise ValidationError(
+                message=(
+                    f"Uploaded file is too large: {len(content_bytes)} bytes; "
+                    f"max allowed is {Config.MAX_UPLOAD_SIZE_BYTES} bytes"
+                ),
+                code="file_too_large",
+                status_code=413,
+            )
+
         resolved_mime = resolve_upload_mime_type(
             file_name=file_name,
             mime_type=mime_type,

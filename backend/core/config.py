@@ -34,6 +34,8 @@ class Config:
     POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql://rag:rag@postgres:5432/rag").strip()
     INGESTION_WORKER_POLL_SECONDS = float(os.getenv("INGESTION_WORKER_POLL_SECONDS", "1.0"))
     INGESTION_RETRY_BACKOFF_SECONDS = float(os.getenv("INGESTION_RETRY_BACKOFF_SECONDS", "0.5"))
+    MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "25"))
+    MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
     ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "change-me").strip()
 
     S3_ENDPOINT = os.getenv("S3_ENDPOINT", "").strip()
