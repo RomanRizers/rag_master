@@ -12,6 +12,7 @@ from backend.api.schemas import (
     ChatSessionListResponse,
     ChatSessionMessagesResponse,
     DocumentIndexResponse,
+    DocumentIndexStatsResponse,
     DocumentListResponse,
     DocumentUploadResponse,
     IndexingRequest,
@@ -171,6 +172,13 @@ async def index_document(request: Request, document_id: str):
     job = await run_in_threadpool(get_ingestion_service(request).start_indexing, document_id)
     response = DocumentIndexResponse.model_validate(job)
     return JSONResponse(content=response.model_dump(), status_code=202)
+
+
+@api_router.get("/api/documents/{document_id}/index-stats")
+async def get_document_index_stats(request: Request, document_id: str):
+    stats = await run_in_threadpool(get_ingestion_service(request).get_document_index_stats, document_id)
+    response = DocumentIndexStatsResponse.model_validate(stats)
+    return JSONResponse(content=response.model_dump())
 
 
 @api_router.get("/api/jobs/{job_id}")

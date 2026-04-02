@@ -213,6 +213,13 @@ class JobListResponse(BaseModel):
     jobs: list[JobStatusResponse]
 
 
+class DocumentIndexStatsResponse(BaseModel):
+    document_id: str
+    status: str
+    chunks_count: int
+    latest_job: JobStatusResponse | None = None
+
+
 class DocumentListItem(BaseModel):
     document_id: str
     file_name: str

@@ -211,6 +211,19 @@ class IngestionService:
         if callable(close_fn):
             close_fn()
 
+    def get_document_index_stats(self, document_id: str) -> dict:
+        document = self.document_service.get_document(document_id)
+        chunks_count = self.api_service.count_document_chunks(document_id)
+        jobs = [job for job in self.job_store.list_jobs() if job.get("document_id") == document_id]
+        jobs.sort(key=lambda item: item.get("started_at") or "", reverse=True)
+        latest_job = jobs[0] if jobs else None
+        return {
+            "document_id": document_id,
+            "status": document.status,
+            "chunks_count": chunks_count,
+            "latest_job": latest_job,
+        }
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()

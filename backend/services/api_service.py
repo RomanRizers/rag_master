@@ -97,3 +97,17 @@ class ApiService:
                 details={"document_id": document_id, "reason": str(error)},
             ) from error
         logger.info("delete_document_chunks_finished", document_id=document_id)
+
+    def count_document_chunks(self, document_id: str) -> int:
+        logger.info("count_document_chunks_started", document_id=document_id)
+        try:
+            count = self.qdrant_service.count_document_chunks(document_id)
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while counting document chunks",
+                details={"document_id": document_id, "reason": str(error)},
+            ) from error
+        logger.info("count_document_chunks_finished", document_id=document_id, chunks_count=count)
+        return count
