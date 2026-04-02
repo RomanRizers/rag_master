@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from threading import RLock
 
 import psycopg
@@ -13,14 +14,13 @@ class PostgresJobStore(JobStore):
         self._lock = RLock()
         self._conn = psycopg.connect(dsn)
         self._conn.autocommit = True
-        self._ensure_schema()
 
     def create_job(self, job: dict) -> dict:
         query = """
             INSERT INTO ingestion_jobs(
                 job_id, document_id, status, progress, attempt, error_code, error_message, started_at, finished_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s::uuid, %s::uuid, %s, %s, %s, %s, %s, %s::timestamptz, %s::timestamptz)
         """
         with self._lock, self._conn.cursor() as cursor:
             cursor.execute(
@@ -43,7 +43,7 @@ class PostgresJobStore(JobStore):
         query = """
             SELECT job_id, document_id, status, progress, attempt, error_code, error_message, started_at, finished_at
             FROM ingestion_jobs
-            WHERE job_id = %s
+            WHERE job_id = %s::uuid
         """
         with self._lock, self._conn.cursor() as cursor:
             cursor.execute(query, (job_id,))
@@ -60,8 +60,8 @@ class PostgresJobStore(JobStore):
         updated.update(changes)
         query = """
             UPDATE ingestion_jobs
-            SET status = %s, progress = %s, attempt = %s, error_code = %s, error_message = %s, started_at = %s, finished_at = %s
-            WHERE job_id = %s
+            SET status = %s, progress = %s, attempt = %s, error_code = %s, error_message = %s, started_at = %s::timestamptz, finished_at = %s::timestamptz
+            WHERE job_id = %s::uuid
         """
         with self._lock, self._conn.cursor() as cursor:
             cursor.execute(
@@ -89,27 +89,6 @@ class PostgresJobStore(JobStore):
             rows = cursor.fetchall()
         return [_row_to_job(row) for row in rows]
 
-    def _ensure_schema(self):
-        with self._lock, self._conn.cursor() as cursor:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS ingestion_jobs(
-                    job_id TEXT PRIMARY KEY,
-                    document_id TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    progress INTEGER NOT NULL,
-                    attempt INTEGER NOT NULL DEFAULT 0,
-                    error_code TEXT,
-                    error_message TEXT,
-                    started_at TEXT,
-                    finished_at TEXT
-                )
-                """
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_document_id ON ingestion_jobs(document_id)"
-            )
-
     def close(self):
         with self._lock:
             self._conn.close()
@@ -117,13 +96,21 @@ class PostgresJobStore(JobStore):
 
 def _row_to_job(row: tuple) -> dict:
     return {
-        "job_id": row[0],
-        "document_id": row[1],
+        "job_id": str(row[0]),
+        "document_id": str(row[1]),
         "status": row[2],
         "progress": int(row[3]),
         "attempt": int(row[4]),
         "error_code": row[5],
         "error_message": row[6],
-        "started_at": row[7],
-        "finished_at": row[8],
+        "started_at": _to_iso(row[7]),
+        "finished_at": _to_iso(row[8]),
     }
+
+
+def _to_iso(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)

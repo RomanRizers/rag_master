@@ -3,9 +3,17 @@ import os
 from uuid import uuid4
 
 from backend.infrastructure.document_store.postgres import PostgresDocumentStore
+from tests.postgres_test_schema import ensure_test_schema
 
 
 class PostgresDocumentStoreTestCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        dsn = os.getenv("RAG_TEST_POSTGRES_DSN")
+        if dsn:
+            ensure_test_schema(dsn)
+
     def test_create_get_and_set_status(self):
         dsn = os.getenv("RAG_TEST_POSTGRES_DSN")
         if not dsn:
