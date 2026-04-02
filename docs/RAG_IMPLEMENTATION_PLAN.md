@@ -377,6 +377,8 @@
 | done | 2026-04-03 | Docker startup: auto `alembic upgrade head` + README runbook по миграциям | `e28b260` |
 | done | 2026-04-03 | Очередь ingestion jobs: `claim_next_queued` + worker-friendly processing flow в сервисе | `a5ba62d` |
 | done | 2026-04-03 | Отдельный `worker` сервис в docker-compose для фоновой обработки ingestion | `f9a7278` |
+| done | 2026-04-03 | Идемпотентный `start_indexing` + retry backoff в ingestion сервисе | `c0efaf2` |
+| done | 2026-04-03 | Unit-тесты ingestion: idempotency и backoff behavior | `31f84fe` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
