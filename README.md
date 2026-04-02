@@ -87,18 +87,17 @@ RERANK_TOP_N=8
 RERANK_SEMANTIC_WEIGHT=0.7
 CHAT_MAX_CONTEXT_CHARS=6000
 CHAT_STORE_BACKEND=memory
-CHAT_SQLITE_PATH=/tmp/rag_chat.db
 JOB_STORE_BACKEND=memory
-JOB_SQLITE_PATH=/tmp/rag_jobs.db
+POSTGRES_DSN=postgresql://rag:rag@postgres:5432/rag
 ```
 
 `CHAT_STORE_BACKEND`:
 - `memory` — in-memory store (default)
-- `sqlite` — persistent store in SQLite file (`CHAT_SQLITE_PATH`)
+- `postgres` — persistent store in PostgreSQL (`POSTGRES_DSN`)
 
 `JOB_STORE_BACKEND`:
 - `memory` — in-memory store (default)
-- `sqlite` — persistent store in SQLite file (`JOB_SQLITE_PATH`)
+- `postgres` — persistent store in PostgreSQL (`POSTGRES_DSN`)
 
 Для локальной модели (OpenAI-compatible gateway):
 
@@ -115,7 +114,7 @@ LOCAL_LLM_API_KEY=
 STORAGE_BACKEND=local
 DOCUMENTS_STORAGE_PATH=/tmp/rag_documents
 DOCUMENT_STORE_BACKEND=memory
-DOCUMENT_SQLITE_PATH=/tmp/rag_documents.db
+POSTGRES_DSN=postgresql://rag:rag@postgres:5432/rag
 ```
 
 Для S3/MinIO:
@@ -134,7 +133,7 @@ S3_AUTO_CREATE_BUCKET=1
 
 `DOCUMENT_STORE_BACKEND`:
 - `memory` — in-memory metadata store (default)
-- `sqlite` — persistent metadata store in SQLite file (`DOCUMENT_SQLITE_PATH`)
+- `postgres` — persistent metadata store in PostgreSQL (`POSTGRES_DSN`)
 
 ## Parser зависимости
 
