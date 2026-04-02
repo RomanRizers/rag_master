@@ -312,7 +312,7 @@
 ## 10.1 Progress tracker (обновляется после каждого commit)
 
 ### Статусы этапов
-- `E1`: DB + S3 + базовые модели документов/джоб — `todo`
+- `E1`: DB + S3 + базовые модели документов/джоб — `in_progress`
 - `E2`: Upload API + storage adapter — `done`
 - `E3`: Worker + parsing + chunking — `done`
 - `E4`: Embedding + Qdrant upsert + job completion — `in_progress`
@@ -363,6 +363,8 @@
 | done | 2026-04-02 | `GET /api/jobs` + filters (`status`, `document_id`) + API tests | `35a8025` |
 | done | 2026-04-02 | README/docs: update endpoints + progress tracker | `bdbd58f` |
 | done | 2026-04-02 | `GET /api/chat/sessions` endpoint + chat API test | `0e3cfb9` |
+| done | 2026-04-03 | Pluggable chat store abstraction + SQLite backend | `4f7cc48` |
+| done | 2026-04-03 | Unit-тесты SQLite chat store | `c2c0972` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
