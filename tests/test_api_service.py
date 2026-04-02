@@ -81,6 +81,26 @@ class ApiServiceTestCase(unittest.TestCase):
 
         self.assertEqual(context.exception.details["document_id"], "d1")
 
+    def test_count_document_chunks_calls_qdrant(self):
+        mock_qdrant = Mock()
+        mock_qdrant.count_document_chunks.return_value = 7
+        service = ApiService(qdrant_service=mock_qdrant, vectorizer=Mock())
+
+        result = service.count_document_chunks("d1")
+
+        self.assertEqual(result, 7)
+        mock_qdrant.count_document_chunks.assert_called_once_with("d1")
+
+    def test_count_document_chunks_wraps_storage_error(self):
+        mock_qdrant = Mock()
+        mock_qdrant.count_document_chunks.side_effect = RuntimeError("qdrant down")
+        service = ApiService(qdrant_service=mock_qdrant, vectorizer=Mock())
+
+        with self.assertRaises(StorageError) as context:
+            service.count_document_chunks("d1")
+
+        self.assertEqual(context.exception.details["document_id"], "d1")
+
 
 if __name__ == "__main__":
     unittest.main()
