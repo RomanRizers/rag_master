@@ -163,7 +163,11 @@ class IngestionService:
         )
         self._update_job(job_id, progress=40)
 
-        chunks = chunk_blocks(blocks)
+        chunks = chunk_blocks(
+            blocks,
+            chunk_size_tokens=Config.CHUNK_SIZE_TOKENS,
+            chunk_overlap_tokens=Config.CHUNK_OVERLAP_TOKENS,
+        )
         if not chunks:
             raise ParsingError(message="No chunks produced from document", code="chunking_failed")
         self._update_job(job_id, progress=70)
