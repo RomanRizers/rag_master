@@ -12,6 +12,7 @@ FastAPI + Qdrant сервис поиска параграфов по векто�
 
 - `frontend` — React SPA (Vite + TypeScript + React Query), отдается через Nginx
 - `backend-app` — backend API (FastAPI)
+- `worker` — фоновая обработка ingestion jobs (очередь в Postgres)
 - `postgres` — персистентное хранилище metadata/чатов/джоб
 - `qdrant` — векторная база
 
@@ -137,6 +138,10 @@ S3_AUTO_CREATE_BUCKET=1
 `DOCUMENT_STORE_BACKEND`:
 - `memory` — in-memory metadata store (default)
 - `postgres` — persistent metadata store in PostgreSQL (`POSTGRES_DSN`)
+
+```bash
+INGESTION_WORKER_POLL_SECONDS=1.0
+```
 
 ## Parser зависимости
 
