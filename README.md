@@ -28,7 +28,7 @@ Frontend и backend разделены по контейнерам.
 - `GET /api/documents` — список загруженных документов
 - `POST /api/documents/{document_id}/index` — запустить job индексации
 - `GET /api/documents/{document_id}/index-stats` — статус документа + количество чанков в индексе + последняя job
-- `POST /api/admin/index/orphans/cleanup` — cleanup orphan chunk-групп в индексе (`{"dry_run": true|false}`)
+- `POST /api/admin/index/orphans/cleanup` — cleanup orphan chunk-групп в индексе (`{"dry_run": true|false}`), требует header `X-Admin-API-Key`
 - `GET /api/jobs` — список job индексации (filters: `status`, `document_id`)
 - `GET /api/jobs/{job_id}` — получить статус job индексации
 - `POST /api/chat/sessions` — создать chat-сессию
@@ -97,6 +97,7 @@ CHAT_MAX_CONTEXT_CHARS=6000
 CHAT_STORE_BACKEND=memory
 JOB_STORE_BACKEND=memory
 POSTGRES_DSN=postgresql://rag:rag@postgres:5432/rag
+ADMIN_API_KEY=change-me
 ```
 
 `CHAT_STORE_BACKEND`:
@@ -115,6 +116,11 @@ LOCAL_LLM_BASE_URL=http://localhost:11434/v1
 LOCAL_LLM_MODEL=...
 LOCAL_LLM_API_KEY=
 ```
+
+Для административного cleanup endpoint:
+
+- передавайте `X-Admin-API-Key: <ADMIN_API_KEY>`;
+- при неверном или отсутствующем ключе backend вернет `401` с кодом `unauthorized`.
 
 ## Storage backend
 
