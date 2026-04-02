@@ -375,6 +375,8 @@
 | done | 2026-04-03 | Unit-тесты store-слоя переведены на PostgreSQL backend | `219b541` |
 | done | 2026-04-03 | Alembic + первая Postgres migration (`uuid/timestamptz/jsonb`) и удаление runtime schema creation | `fe35ab9` |
 | done | 2026-04-03 | Docker startup: auto `alembic upgrade head` + README runbook по миграциям | `e28b260` |
+| done | 2026-04-03 | Очередь ingestion jobs: `claim_next_queued` + worker-friendly processing flow в сервисе | `a5ba62d` |
+| done | 2026-04-03 | Отдельный `worker` сервис в docker-compose для фоновой обработки ingestion | `f9a7278` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
