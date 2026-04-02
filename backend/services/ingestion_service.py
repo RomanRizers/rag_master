@@ -164,6 +164,9 @@ class IngestionService:
     def _is_retryable_error(error: ApiError) -> bool:
         return error.code in {"storage_error", "vectorization_error"}
 
+    def close(self):
+        self._executor.shutdown(wait=False, cancel_futures=True)
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()

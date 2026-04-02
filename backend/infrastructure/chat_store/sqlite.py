@@ -139,3 +139,7 @@ class SqliteChatStore(ChatStore):
                 "ON chat_messages(session_id, created_at)"
             )
             self._conn.commit()
+
+    def close(self):
+        with self._lock:
+            self._conn.close()

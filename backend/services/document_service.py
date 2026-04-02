@@ -108,6 +108,11 @@ class DocumentService:
         record = self.get_document(document_id)
         return self.storage.read(record.object_key)
 
+    def close(self):
+        close_fn = getattr(self.store, "close", None)
+        if callable(close_fn):
+            close_fn()
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
