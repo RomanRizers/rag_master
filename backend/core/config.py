@@ -13,6 +13,8 @@ class Config:
     CHAT_MAX_CONTEXT_CHARS = int(os.getenv("CHAT_MAX_CONTEXT_CHARS", "6000"))
     CHAT_STORE_BACKEND = os.getenv("CHAT_STORE_BACKEND", "memory").strip().lower()
     CHAT_SQLITE_PATH = os.getenv("CHAT_SQLITE_PATH", "/tmp/rag_chat.db").strip()
+    JOB_STORE_BACKEND = os.getenv("JOB_STORE_BACKEND", "memory").strip().lower()
+    JOB_SQLITE_PATH = os.getenv("JOB_SQLITE_PATH", "/tmp/rag_jobs.db").strip()
 
     LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").strip().lower()
 
