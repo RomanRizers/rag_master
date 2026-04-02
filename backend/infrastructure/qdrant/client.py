@@ -119,3 +119,24 @@ class QdrantService:
         except Exception as error:
             raise StorageError(message="Qdrant delete failed", details={"reason": str(error)}) from error
         logger.info("qdrant_delete_document_chunks_finished", document_id=document_id)
+
+    def count_document_chunks(self, document_id: str) -> int:
+        logger.info("qdrant_count_document_chunks_started", document_id=document_id)
+        try:
+            response = self.client.count(
+                collection_name=self.collection_name,
+                count_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=document_id),
+                        )
+                    ]
+                ),
+                exact=True,
+            )
+        except Exception as error:
+            raise StorageError(message="Qdrant count failed", details={"reason": str(error)}) from error
+        count = int(getattr(response, "count", 0))
+        logger.info("qdrant_count_document_chunks_finished", document_id=document_id, chunks_count=count)
+        return count
