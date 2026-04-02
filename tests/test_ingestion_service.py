@@ -38,7 +38,10 @@ class IngestionServiceTestCase(unittest.TestCase):
             ingestion = IngestionService(document_service=documents, api_service=api_service)
 
             result = ingestion.start_indexing(record["document_id"])
-            ingestion._executor.shutdown(wait=True)
+            claimed = ingestion.claim_next_job()
+            self.assertIsNotNone(claimed)
+            self.assertEqual(claimed["job_id"], result["job_id"])
+            ingestion.process_job(result["job_id"])
             job = ingestion.get_job(result["job_id"])
 
             self.assertEqual(job["status"], "done")
@@ -55,7 +58,10 @@ class IngestionServiceTestCase(unittest.TestCase):
             ingestion = IngestionService(document_service=documents, api_service=api_service)
 
             result = ingestion.start_indexing(record["document_id"])
-            ingestion._executor.shutdown(wait=True)
+            claimed = ingestion.claim_next_job()
+            self.assertIsNotNone(claimed)
+            self.assertEqual(claimed["job_id"], result["job_id"])
+            ingestion.process_job(result["job_id"])
             job = ingestion.get_job(result["job_id"])
 
             self.assertEqual(job["status"], "failed")

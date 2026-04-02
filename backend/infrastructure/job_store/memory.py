@@ -29,3 +29,12 @@ class InMemoryJobStore(JobStore):
     def list_jobs(self) -> list[dict]:
         with self._lock:
             return [dict(item) for item in self._jobs.values()]
+
+    def claim_next_queued(self, started_at: str) -> dict | None:
+        with self._lock:
+            for job in self._jobs.values():
+                if job.get("status") == "queued":
+                    job["status"] = "running"
+                    job["started_at"] = job.get("started_at") or started_at
+                    return dict(job)
+        return None

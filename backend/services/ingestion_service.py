@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -27,7 +26,6 @@ class IngestionService:
         self.document_service = document_service
         self.api_service = api_service or ApiService()
         self.job_store = job_store or create_job_store()
-        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ingestion")
 
     def start_indexing(self, document_id: str) -> dict:
         self.document_service.get_document(document_id)
@@ -45,11 +43,23 @@ class IngestionService:
         }
 
         self.job_store.create_job(job)
-
-        self.document_service.set_status(document_id, "indexing")
-        self._executor.submit(self._run_job, job_id)
-
         return {"job_id": job_id, "status": "queued", "document_id": document_id}
+
+    def claim_next_job(self) -> dict | None:
+        return self.job_store.claim_next_queued(started_at=_now_iso())
+
+    def process_job(self, job_id: str):
+        job = self.get_job(job_id)
+        if job["status"] == "queued":
+            claimed = self.job_store.claim_next_queued(started_at=_now_iso())
+            if claimed is None:
+                return
+            if claimed["job_id"] != job_id:
+                return
+            job = claimed
+        if job["status"] != "running":
+            return
+        self._run_job(job_id)
 
     def get_job(self, job_id: str) -> dict:
         job = self.job_store.get_job(job_id)
@@ -71,8 +81,13 @@ class IngestionService:
         return jobs
 
     def _run_job(self, job_id: str):
-        job = self._update_job(job_id, status="running", progress=5, started_at=_now_iso())
+        job = self.get_job(job_id)
+        if job["status"] != "running":
+            return
+
+        job = self._update_job(job_id, progress=max(5, int(job.get("progress") or 0)), started_at=job.get("started_at") or _now_iso())
         document_id = job["document_id"]
+        self.document_service.set_status(document_id, "indexing")
         logger.info("index_job_started", job_id=job_id, document_id=document_id)
         for attempt in range(1, self.MAX_RETRIES + 1):
             self._update_job(job_id, attempt=attempt, error_code=None, error_message=None)
@@ -165,7 +180,9 @@ class IngestionService:
         return error.code in {"storage_error", "vectorization_error"}
 
     def close(self):
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        close_fn = getattr(self.job_store, "close", None)
+        if callable(close_fn):
+            close_fn()
 
 
 def _now_iso() -> str:

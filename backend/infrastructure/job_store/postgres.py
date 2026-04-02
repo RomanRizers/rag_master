@@ -89,6 +89,39 @@ class PostgresJobStore(JobStore):
             rows = cursor.fetchall()
         return [_row_to_job(row) for row in rows]
 
+    def claim_next_queued(self, started_at: str) -> dict | None:
+        query = """
+            WITH picked AS (
+                SELECT job_id
+                FROM ingestion_jobs
+                WHERE status = 'queued'
+                ORDER BY job_id
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+            )
+            UPDATE ingestion_jobs AS jobs
+            SET status = 'running',
+                started_at = COALESCE(jobs.started_at, %s::timestamptz)
+            FROM picked
+            WHERE jobs.job_id = picked.job_id
+            RETURNING
+                jobs.job_id,
+                jobs.document_id,
+                jobs.status,
+                jobs.progress,
+                jobs.attempt,
+                jobs.error_code,
+                jobs.error_message,
+                jobs.started_at,
+                jobs.finished_at
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query, (started_at,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return _row_to_job(row)
+
     def close(self):
         with self._lock:
             self._conn.close()
