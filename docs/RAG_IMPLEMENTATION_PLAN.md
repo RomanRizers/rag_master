@@ -65,6 +65,14 @@
     - `status`
     - `chunks_count`
     - `latest_job` (nullable)
+- `POST /api/admin/index/orphans/cleanup`
+  - request: `{ "dry_run": true|false }`
+  - `200`:
+    - `dry_run`
+    - `indexed_documents_count`
+    - `existing_documents_count`
+    - `orphan_document_ids`
+    - `deleted_documents_count`
 - `GET /api/jobs/{job_id}`
   - `200`:
     - `job_id`
@@ -395,6 +403,8 @@
 | done | 2026-04-03 | Unit-тест на `chunk_id/source_uri` в payload | `e812eb8` |
 | done | 2026-04-03 | API: `GET /api/documents/{id}/index-stats` + qdrant count by `document_id` | `fbec894` |
 | done | 2026-04-03 | Unit/API тесты для index-stats и count chunks | `1096b7f` |
+| done | 2026-04-03 | Admin cleanup endpoint для orphan chunks (`dry_run|delete`) | `accd99a` |
+| done | 2026-04-03 | Unit/API тесты orphan cleanup workflow | `15e5b8c` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
