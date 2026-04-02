@@ -100,6 +100,11 @@ func TestUploadEmptyFileReturnsValidationError(t *testing.T) {
 	assertErrorCode(t, resp, http.StatusBadRequest, "empty_file")
 }
 
+func TestUploadUnsupportedFileTypeReturnsValidationError(t *testing.T) {
+	resp := postMultipartDocument(t, "/api/documents/upload", "archive.bin", []byte("not supported"))
+	assertErrorCode(t, resp, http.StatusBadRequest, "invalid_file_type")
+}
+
 func TestStartIndexAndGetJobStatusEndpoints(t *testing.T) {
 	uploadResp := postMultipartDocument(t, "/api/documents/upload", "index-me.txt", []byte("index me please"))
 	if uploadResp.StatusCode != http.StatusCreated {
