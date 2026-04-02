@@ -97,6 +97,7 @@ CHAT_MAX_CONTEXT_CHARS=6000
 CHAT_STORE_BACKEND=memory
 JOB_STORE_BACKEND=memory
 POSTGRES_DSN=postgresql://rag:rag@postgres:5432/rag
+MAX_UPLOAD_SIZE_MB=25
 ADMIN_API_KEY=change-me
 ```
 

@@ -288,6 +288,7 @@
 - `LOCAL_LLM_API_KEY` (optional)
 - `CHUNK_SIZE_TOKENS`
 - `CHUNK_OVERLAP_TOKENS`
+- `MAX_UPLOAD_SIZE_MB`
 - `ADMIN_API_KEY`
 
 ## 9. Тестовая стратегия
@@ -415,6 +416,8 @@
 | done | 2026-04-03 | API-тест `invalid_file_type` для unsupported upload | `5bc51e6` |
 | done | 2026-04-03 | MIME-sniffing на upload с проверкой declared type vs content signature | `af959c0` |
 | done | 2026-04-03 | Python+Go тесты на spoofed upload (подмена PDF/unsupported) | `32d3e6d` |
+| done | 2026-04-03 | Лимит размера upload (`MAX_UPLOAD_SIZE_MB`) + ошибка `file_too_large` (413) | `7828492` |
+| done | 2026-04-03 | Python+Go тесты на превышение лимита upload | `1ff1efd` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
