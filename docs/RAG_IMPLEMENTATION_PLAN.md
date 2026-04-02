@@ -381,6 +381,8 @@
 | done | 2026-04-03 | Unit-тесты ingestion: idempotency и backoff behavior | `31f84fe` |
 | done | 2026-04-03 | Token-based chunking в ingestion pipeline (`CHUNK_SIZE_TOKENS`, `CHUNK_OVERLAP_TOKENS`) | `c8df17f` |
 | done | 2026-04-03 | Unit-тесты chunker обновлены под token slicing + overlap validation | `655a9eb` |
+| done | 2026-04-03 | Parser hardening: whitespace normalization + DOCX sections/tables extraction | `0977521` |
+| done | 2026-04-03 | Unit-тесты parser/ingestion metadata (`token_count`) | `0ad8a1a` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
