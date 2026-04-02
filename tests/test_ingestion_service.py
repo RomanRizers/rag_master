@@ -28,6 +28,19 @@ class _ApiServiceAlwaysFail:
         raise StorageError(message="down")
 
 
+class _ApiServiceCapturePayload:
+    def __init__(self):
+        self.calls = 0
+        self.last_document_name = None
+        self.last_documents = None
+
+    def index_documents(self, document_name: str, documents: list):
+        self.calls += 1
+        self.last_document_name = document_name
+        self.last_documents = documents
+        return {"status": "success"}
+
+
 class IngestionServiceTestCase(unittest.TestCase):
     def test_start_indexing_is_idempotent_for_active_job(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -100,6 +113,30 @@ class IngestionServiceTestCase(unittest.TestCase):
             self.assertEqual(job["status"], "failed")
             self.assertEqual(job["attempt"], 3)
             self.assertEqual(api_service.calls, 3)
+
+    def test_index_payload_contains_chunk_token_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage = LocalFileStorageAdapter(temp_dir)
+            documents = DocumentService(storage=storage)
+            record = documents.create_document("doc.txt", "text/plain", b"one two three four")
+
+            api_service = _ApiServiceCapturePayload()
+            ingestion = IngestionService(document_service=documents, api_service=api_service)
+
+            result = ingestion.start_indexing(record["document_id"])
+            claimed = ingestion.claim_next_job()
+            self.assertIsNotNone(claimed)
+            self.assertEqual(claimed["job_id"], result["job_id"])
+            ingestion.process_job(result["job_id"])
+
+            self.assertEqual(api_service.calls, 1)
+            self.assertEqual(api_service.last_document_name, "doc.txt")
+            self.assertIsNotNone(api_service.last_documents)
+            self.assertEqual(len(api_service.last_documents), 1)
+            metadata = api_service.last_documents[0]["metadata"]
+            self.assertEqual(metadata["document_id"], record["document_id"])
+            self.assertEqual(metadata["chunk_index"], 0)
+            self.assertEqual(metadata["token_count"], 4)
 
 
 if __name__ == "__main__":
