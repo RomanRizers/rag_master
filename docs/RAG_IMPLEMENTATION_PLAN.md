@@ -371,6 +371,8 @@
 | done | 2026-04-03 | Unit-тесты SQLite document store | `67d92d1` |
 | done | 2026-04-03 | Lifecycle wiring: `app.state.services` + startup/shutdown close | `05cb5fe` |
 | done | 2026-04-03 | Unit-тест lifecycle и инициализации `app.state.services` | `2ae33af` |
+| done | 2026-04-03 | Миграция persistent store слоя: SQLite -> PostgreSQL (`chat/jobs/documents`) | `312e103` |
+| done | 2026-04-03 | Unit-тесты store-слоя переведены на PostgreSQL backend | `219b541` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
