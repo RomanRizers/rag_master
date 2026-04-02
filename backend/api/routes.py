@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from backend.api.dependencies import ensure_json_content_type
+from backend.api.dependencies import ensure_admin_api_key, ensure_json_content_type
 from backend.api.schemas import (
     ChatMessageRequest,
     ChatSendMessageResponse,
@@ -188,6 +188,7 @@ async def cleanup_orphan_index_chunks(
     request: Request,
     payload: OrphanCleanupRequest,
     _: None = Depends(ensure_json_content_type),
+    __: None = Depends(ensure_admin_api_key),
 ):
     result = await run_in_threadpool(
         get_ingestion_service(request).cleanup_orphan_chunks,
