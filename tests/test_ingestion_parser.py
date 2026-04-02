@@ -22,11 +22,18 @@ def _make_docx_bytes(paragraphs: list[str]) -> bytes:
     return buffer.getvalue()
 
 
+def _make_docx_xml_bytes(document_xml: str) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("word/document.xml", document_xml)
+    return buffer.getvalue()
+
+
 class ParserTestCase(unittest.TestCase):
     def test_parse_plain_text(self):
         blocks = parse_document("sample.txt", "text/plain", b" hello\nworld ")
         self.assertEqual(len(blocks), 1)
-        self.assertEqual(blocks[0]["text"], "hello\nworld")
+        self.assertEqual(blocks[0]["text"], "hello world")
 
     def test_parse_docx(self):
         content = _make_docx_bytes(["Первый абзац", "Второй абзац"])
@@ -38,6 +45,33 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(len(blocks), 2)
         self.assertEqual(blocks[0]["text"], "Первый абзац")
         self.assertEqual(blocks[1]["text"], "Второй абзац")
+
+    def test_parse_docx_extracts_headings_and_tables(self):
+        content = _make_docx_xml_bytes(
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            "<w:body>"
+            '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Документ</w:t></w:r></w:p>'
+            '<w:p><w:r><w:t>Вводный   текст</w:t></w:r></w:p>'
+            "<w:tbl>"
+            "<w:tr>"
+            "<w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>"
+            "<w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc>"
+            "</w:tr>"
+            "</w:tbl>"
+            "</w:body>"
+            "</w:document>"
+        )
+        blocks = parse_document(
+            "sample.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            content,
+        )
+        self.assertEqual(blocks[0]["text"], "[SECTION H1] Документ")
+        self.assertEqual(blocks[1]["text"], "Вводный текст")
+        self.assertEqual(blocks[1]["section"], "Документ")
+        self.assertEqual(blocks[2]["text"], "[TABLE] A1 | B1")
+        self.assertEqual(blocks[2]["section"], "Документ")
 
     def test_parse_pdf_without_dependency_raises_parsing_error(self):
         with self.assertRaises(ParsingError) as context:
@@ -52,6 +86,7 @@ class ChunkerTestCase(unittest.TestCase):
         self.assertGreaterEqual(len(chunks), 3)
         self.assertEqual(chunks[0]["page"], 1)
         self.assertEqual(chunks[0]["chunk_index"], 0)
+        self.assertEqual(chunks[0]["token_count"], 100)
 
     def test_chunk_blocks_ignores_empty_items(self):
         chunks = chunk_blocks(
