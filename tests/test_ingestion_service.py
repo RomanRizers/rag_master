@@ -56,6 +56,9 @@ class _ApiServiceCapturePayload:
     def count_document_chunks(self, document_id: str):
         return 11
 
+    def list_indexed_document_ids(self):
+        return ["known-document", "orphan-document"]
+
 
 class IngestionServiceTestCase(unittest.TestCase):
     def test_start_indexing_is_idempotent_for_active_job(self):
@@ -173,6 +176,42 @@ class IngestionServiceTestCase(unittest.TestCase):
             self.assertEqual(stats["status"], "uploaded")
             self.assertEqual(stats["chunks_count"], 11)
             self.assertEqual(stats["latest_job"]["job_id"], queued["job_id"])
+
+    def test_cleanup_orphan_chunks_dry_run(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage = LocalFileStorageAdapter(temp_dir)
+            documents = DocumentService(storage=storage)
+            record = documents.create_document("doc.txt", "text/plain", b"one two three four")
+            api_service = _ApiServiceCapturePayload()
+            api_service.list_indexed_document_ids = lambda: [record["document_id"], "orphan-id"]
+            ingestion = IngestionService(document_service=documents, api_service=api_service)
+
+            result = ingestion.cleanup_orphan_chunks(dry_run=True)
+
+            self.assertTrue(result["dry_run"])
+            self.assertEqual(result["indexed_documents_count"], 2)
+            self.assertEqual(result["existing_documents_count"], 1)
+            self.assertEqual(result["orphan_document_ids"], ["orphan-id"])
+            self.assertEqual(result["deleted_documents_count"], 0)
+
+    def test_cleanup_orphan_chunks_deletes_orphans(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage = LocalFileStorageAdapter(temp_dir)
+            documents = DocumentService(storage=storage)
+            record = documents.create_document("doc.txt", "text/plain", b"one two three four")
+            api_service = _ApiServiceCapturePayload()
+            deleted_ids = []
+
+            api_service.list_indexed_document_ids = lambda: [record["document_id"], "orphan-id"]
+            api_service.delete_document_chunks = lambda document_id: deleted_ids.append(document_id) or {"status": "success"}
+
+            ingestion = IngestionService(document_service=documents, api_service=api_service)
+            result = ingestion.cleanup_orphan_chunks(dry_run=False)
+
+            self.assertFalse(result["dry_run"])
+            self.assertEqual(result["orphan_document_ids"], ["orphan-id"])
+            self.assertEqual(result["deleted_documents_count"], 1)
+            self.assertEqual(deleted_ids, ["orphan-id"])
 
 
 if __name__ == "__main__":

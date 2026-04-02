@@ -46,6 +46,15 @@ class _FakeIngestionService:
             "latest_job": latest_job,
         }
 
+    def cleanup_orphan_chunks(self, dry_run: bool = True):
+        return {
+            "dry_run": dry_run,
+            "indexed_documents_count": 4,
+            "existing_documents_count": 3,
+            "orphan_document_ids": ["orphan-1"],
+            "deleted_documents_count": 0 if dry_run else 1,
+        }
+
 
 class DocumentIngestionApiTestCase(unittest.TestCase):
     def setUp(self):
@@ -147,6 +156,19 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
         self.assertEqual(payload["document_id"], document_id)
         self.assertEqual(payload["chunks_count"], 3)
         self.assertEqual(payload["latest_job"]["job_id"], "job-1")
+
+    @patch("backend.api.routes.get_document_service")
+    @patch("backend.api.routes.get_ingestion_service")
+    def test_cleanup_orphan_chunks_endpoint(self, get_ingestion_service_mock, get_document_service_mock):
+        get_document_service_mock.return_value = self.document_service
+        get_ingestion_service_mock.return_value = self.ingestion_service
+
+        response = self.client.post("/api/admin/index/orphans/cleanup", json={"dry_run": True})
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["dry_run"], True)
+        self.assertEqual(payload["orphan_document_ids"], ["orphan-1"])
+        self.assertEqual(payload["deleted_documents_count"], 0)
 
 
 if __name__ == "__main__":
