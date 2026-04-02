@@ -18,6 +18,9 @@ class _ApiServiceFlaky:
             raise StorageError(message="temporary")
         return {"status": "success"}
 
+    def delete_document_chunks(self, document_id: str):
+        return {"status": "success"}
+
 
 class _ApiServiceAlwaysFail:
     def __init__(self):
@@ -27,10 +30,15 @@ class _ApiServiceAlwaysFail:
         self.calls += 1
         raise StorageError(message="down")
 
+    def delete_document_chunks(self, document_id: str):
+        return {"status": "success"}
+
 
 class _ApiServiceCapturePayload:
     def __init__(self):
         self.calls = 0
+        self.delete_calls = 0
+        self.last_deleted_document_id = None
         self.last_document_name = None
         self.last_documents = None
 
@@ -38,6 +46,11 @@ class _ApiServiceCapturePayload:
         self.calls += 1
         self.last_document_name = document_name
         self.last_documents = documents
+        return {"status": "success"}
+
+    def delete_document_chunks(self, document_id: str):
+        self.delete_calls += 1
+        self.last_deleted_document_id = document_id
         return {"status": "success"}
 
 
@@ -130,6 +143,8 @@ class IngestionServiceTestCase(unittest.TestCase):
             ingestion.process_job(result["job_id"])
 
             self.assertEqual(api_service.calls, 1)
+            self.assertEqual(api_service.delete_calls, 1)
+            self.assertEqual(api_service.last_deleted_document_id, record["document_id"])
             self.assertEqual(api_service.last_document_name, "doc.txt")
             self.assertIsNotNone(api_service.last_documents)
             self.assertEqual(len(api_service.last_documents), 1)
