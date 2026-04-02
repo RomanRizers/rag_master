@@ -4,6 +4,8 @@ export type SearchResult = {
   payload: {
     content?: string;
     keywords?: string[];
+    document_name?: string;
+    page?: number;
   };
 };
 
@@ -23,4 +25,112 @@ export type ApiErrorResponse = {
     message: string;
     details?: unknown;
   };
+};
+
+export type DocumentItem = {
+  document_id: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  status: string;
+  source_name?: string | null;
+  tags: string[];
+  created_at: string;
+};
+
+export type DocumentListResponse = {
+  documents: DocumentItem[];
+};
+
+export type DocumentUploadResponse = {
+  document_id: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  status: string;
+  created_at: string;
+};
+
+export type DocumentIndexResponse = {
+  job_id: string;
+  status: string;
+  document_id: string;
+};
+
+export type JobItem = {
+  job_id: string;
+  document_id: string;
+  status: string;
+  progress: number;
+  attempt: number;
+  error_code?: string | null;
+  error_message?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+};
+
+export type JobListResponse = {
+  jobs: JobItem[];
+};
+
+export type DocumentIndexStatsResponse = {
+  document_id: string;
+  status: string;
+  chunks_count: number;
+  latest_job?: JobItem | null;
+};
+
+export type ChatCitation = {
+  document_id?: string | null;
+  document_name?: string | null;
+  chunk_id?: string | null;
+  page?: number | null;
+  snippet?: string | null;
+};
+
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant" | "system" | string;
+  content: string;
+  citations: ChatCitation[];
+  created_at: string;
+};
+
+export type ChatSession = {
+  session_id: string;
+  created_at: string;
+  message_count: number;
+  last_message_at?: string | null;
+};
+
+export type ChatSessionListResponse = {
+  sessions: ChatSession[];
+};
+
+export type ChatSessionCreateResponse = {
+  session_id: string;
+  created_at: string;
+};
+
+export type ChatMessagesResponse = {
+  session_id: string;
+  messages: ChatMessage[];
+};
+
+export type ChatFilters = {
+  document_names?: string[];
+  tags?: string[];
+};
+
+export type ChatMessageRequest = {
+  message: string;
+  top_k?: number;
+  keywords?: string[];
+  filters?: ChatFilters;
+};
+
+export type ChatSendMessageResponse = {
+  session_id: string;
+  user_message: ChatMessage;
+  assistant_message: ChatMessage;
 };
