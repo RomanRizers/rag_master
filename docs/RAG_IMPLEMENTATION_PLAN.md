@@ -385,6 +385,8 @@
 | done | 2026-04-03 | Unit-тесты parser/ingestion metadata (`token_count`) | `0ad8a1a` |
 | done | 2026-04-03 | Reindex safety: удаление старых chunk points в Qdrant перед новой индексацией | `f6930d9` |
 | done | 2026-04-03 | Unit-тесты cleanup шага (api_service + ingestion) | `4d43af3` |
+| done | 2026-04-03 | Metadata enrichment: `chunk_id` + `source_uri` в ingestion payload | `f466eed` |
+| done | 2026-04-03 | Unit-тест на `chunk_id/source_uri` в payload | `e812eb8` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
