@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from threading import RLock
 from uuid import uuid4
 
 import structlog
 
 from backend.core.exceptions import ApiError, DocumentError, ParsingError
+from backend.infrastructure.job_store import JobStore, create_job_store
 from backend.ingestion import chunk_blocks, parse_document
 from backend.services.api_service import ApiService
 from backend.services.document_service import DocumentService
@@ -18,11 +18,15 @@ logger = structlog.get_logger("ingestion")
 class IngestionService:
     MAX_RETRIES = 3
 
-    def __init__(self, document_service: DocumentService, api_service: ApiService | None = None):
+    def __init__(
+        self,
+        document_service: DocumentService,
+        api_service: ApiService | None = None,
+        job_store: JobStore | None = None,
+    ):
         self.document_service = document_service
         self.api_service = api_service or ApiService()
-        self._jobs: dict[str, dict] = {}
-        self._lock = RLock()
+        self.job_store = job_store or create_job_store()
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ingestion")
 
     def start_indexing(self, document_id: str) -> dict:
@@ -40,8 +44,7 @@ class IngestionService:
             "finished_at": None,
         }
 
-        with self._lock:
-            self._jobs[job_id] = job
+        self.job_store.create_job(job)
 
         self.document_service.set_status(document_id, "indexing")
         self._executor.submit(self._run_job, job_id)
@@ -49,19 +52,17 @@ class IngestionService:
         return {"job_id": job_id, "status": "queued", "document_id": document_id}
 
     def get_job(self, job_id: str) -> dict:
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
-                raise DocumentError(
-                    message=f"Job not found: {job_id}",
-                    code="job_not_found",
-                    status_code=404,
-                )
-            return dict(job)
+        job = self.job_store.get_job(job_id)
+        if job is None:
+            raise DocumentError(
+                message=f"Job not found: {job_id}",
+                code="job_not_found",
+                status_code=404,
+            )
+        return job
 
     def list_jobs(self, status: str | None = None, document_id: str | None = None) -> list[dict]:
-        with self._lock:
-            jobs = [dict(item) for item in self._jobs.values()]
+        jobs = self.job_store.list_jobs()
         if status:
             jobs = [item for item in jobs if item.get("status") == status]
         if document_id:
@@ -157,10 +158,7 @@ class IngestionService:
         logger.info("index_job_finished", job_id=job_id, document_id=document_id, chunks=len(chunks))
 
     def _update_job(self, job_id: str, **changes) -> dict:
-        with self._lock:
-            job = self._jobs[job_id]
-            job.update(changes)
-            return dict(job)
+        return self.job_store.update_job(job_id, **changes)
 
     @staticmethod
     def _is_retryable_error(error: ApiError) -> bool:
