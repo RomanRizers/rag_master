@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import time
 from uuid import uuid4
 
 import structlog
 
+from backend.core.config import Config
 from backend.core.exceptions import ApiError, DocumentError, ParsingError
 from backend.infrastructure.job_store import JobStore, create_job_store
 from backend.ingestion import chunk_blocks, parse_document
@@ -29,6 +31,14 @@ class IngestionService:
 
     def start_indexing(self, document_id: str) -> dict:
         self.document_service.get_document(document_id)
+        active_job = self._find_active_job_for_document(document_id)
+        if active_job is not None:
+            return {
+                "job_id": active_job["job_id"],
+                "status": active_job["status"],
+                "document_id": document_id,
+            }
+
         job_id = str(uuid4())
         job = {
             "job_id": job_id,
@@ -114,6 +124,9 @@ class IngestionService:
                         error_code=exc.code,
                         error_message=f"{exc.message}; retrying",
                     )
+                    backoff_seconds = max(0.0, Config.INGESTION_RETRY_BACKOFF_SECONDS) * attempt
+                    if backoff_seconds > 0:
+                        time.sleep(backoff_seconds)
                     continue
 
                 self.document_service.set_status(document_id, "failed")
@@ -178,6 +191,12 @@ class IngestionService:
     @staticmethod
     def _is_retryable_error(error: ApiError) -> bool:
         return error.code in {"storage_error", "vectorization_error"}
+
+    def _find_active_job_for_document(self, document_id: str) -> dict | None:
+        for job in self.job_store.list_jobs():
+            if job.get("document_id") == document_id and job.get("status") in {"queued", "running"}:
+                return job
+        return None
 
     def close(self):
         close_fn = getattr(self.job_store, "close", None)
