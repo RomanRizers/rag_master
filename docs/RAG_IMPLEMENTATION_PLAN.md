@@ -336,14 +336,14 @@
 ## 10.1 Progress tracker (обновляется после каждого commit)
 
 ### Статусы этапов
-- `E1`: DB + S3 + базовые модели документов/джоб — `in_progress`
+- `E1`: DB + S3 + базовые модели документов/джоб — `done`
 - `E2`: Upload API + storage adapter — `done`
 - `E3`: Worker + parsing + chunking — `done`
-- `E4`: Embedding + Qdrant upsert + job completion — `in_progress`
+- `E4`: Embedding + Qdrant upsert + job completion — `done`
 - `E5`: Chat sessions/messages API + retrieval pipeline + rerank — `in_progress`
 - `E6`: LLM provider + streaming SSE + citations — `done`
 - `E7`: Frontend documents/chat UX — `todo`
-- `E8`: Tests hardening + observability + readiness checks — `todo`
+- `E8`: Tests hardening + observability + readiness checks — `in_progress`
 
 ### Выполненные изменения (changelog)
 | Status | Date | Task | Commit |
@@ -425,6 +425,16 @@
 | done | 2026-04-03 | Python+Go тесты на превышение лимита upload | `1ff1efd` |
 | done | 2026-04-03 | In-memory rate limiting middleware для `upload/index/chat` | `329a440` |
 | done | 2026-04-03 | Unit-тесты middleware rate limiting (`429`, disabled mode) | `34d2eb5` |
+| done | 2026-04-03 | Docs: env и поведение rate limiting (`rate_limited`) | `e8057d5` |
+
+## 10.2 Остаточный backlog до v1 done
+
+1. Закрыть `E5`: добавить `filters` в chat request (по `document_name/tags`) и интегрировать их в retrieval.
+2. Закрыть `E7`: реализовать полноценный React UX для `Documents` и `Chat` (upload, jobs, session list, citations, error banners), сейчас frontend в основном search-oriented.
+3. Закрыть `E8`: расширить readiness/операционные проверки (включая LLM/provider checks и деградационные сценарии).
+4. Закрыть `E8`: финализировать автоматизацию тестов в едином CI прогоне (Python unit + Go integration + frontend tests).
+5. Закрыть DoD: оформить и зафиксировать runbook эксплуатации (restart, retry ingestion jobs, orphan cleanup, health triage).
+6. Закрыть DoD: добавить стабильный e2e-сценарий `upload -> index done -> chat answer with non-empty citations`.
 
 ### Правило ведения трекера
 - После каждого нового коммита:
