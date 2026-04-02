@@ -186,6 +186,8 @@ class IngestionService:
                     "page": chunk.get("page"),
                     "section": chunk.get("section"),
                     "source_uri": document.object_key,
+                    "source_name": document.source_name,
+                    "tags": list(document.tags),
                 },
             }
             for chunk in chunks

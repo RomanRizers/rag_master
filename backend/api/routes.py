@@ -241,6 +241,7 @@ async def send_chat_message(request: Request, payload: ChatMessageRequest, sessi
         payload.message,
         payload.top_k,
         payload.keywords,
+        payload.filters.model_dump(exclude_none=True) if payload.filters else None,
     )
     response = ChatSendMessageResponse(
         session_id=session_id,
@@ -258,6 +259,7 @@ async def stream_chat_message(request: Request, payload: ChatMessageRequest, ses
         payload.message,
         payload.top_k,
         payload.keywords,
+        payload.filters.model_dump(exclude_none=True) if payload.filters else None,
     )
 
     def event_stream():
