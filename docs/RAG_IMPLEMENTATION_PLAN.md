@@ -59,6 +59,12 @@
   - `202`:
     - `job_id`
     - `status` = `queued`
+- `GET /api/documents/{document_id}/index-stats`
+  - `200`:
+    - `document_id`
+    - `status`
+    - `chunks_count`
+    - `latest_job` (nullable)
 - `GET /api/jobs/{job_id}`
   - `200`:
     - `job_id`
@@ -387,6 +393,8 @@
 | done | 2026-04-03 | Unit-тесты cleanup шага (api_service + ingestion) | `4d43af3` |
 | done | 2026-04-03 | Metadata enrichment: `chunk_id` + `source_uri` в ingestion payload | `f466eed` |
 | done | 2026-04-03 | Unit-тест на `chunk_id/source_uri` в payload | `e812eb8` |
+| done | 2026-04-03 | API: `GET /api/documents/{id}/index-stats` + qdrant count by `document_id` | `fbec894` |
+| done | 2026-04-03 | Unit/API тесты для index-stats и count chunks | `1096b7f` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
