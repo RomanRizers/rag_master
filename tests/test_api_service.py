@@ -63,6 +63,24 @@ class ApiServiceTestCase(unittest.TestCase):
         self.assertEqual(call_kwargs["metadata"]["document_id"], "d1")
         self.assertEqual(call_kwargs["metadata"]["chunk_index"], 3)
 
+    def test_delete_document_chunks_calls_qdrant(self):
+        mock_qdrant = Mock()
+        service = ApiService(qdrant_service=mock_qdrant, vectorizer=Mock())
+
+        service.delete_document_chunks("d1")
+
+        mock_qdrant.delete_document_chunks.assert_called_once_with("d1")
+
+    def test_delete_document_chunks_wraps_storage_error(self):
+        mock_qdrant = Mock()
+        mock_qdrant.delete_document_chunks.side_effect = RuntimeError("qdrant down")
+        service = ApiService(qdrant_service=mock_qdrant, vectorizer=Mock())
+
+        with self.assertRaises(StorageError) as context:
+            service.delete_document_chunks("d1")
+
+        self.assertEqual(context.exception.details["document_id"], "d1")
+
 
 if __name__ == "__main__":
     unittest.main()
