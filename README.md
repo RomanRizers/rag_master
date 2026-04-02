@@ -27,6 +27,7 @@ Frontend и backend разделены по контейнерам.
 - `POST /api/documents/upload` — загрузить документ (multipart)
 - `GET /api/documents` — список загруженных документов
 - `POST /api/documents/{document_id}/index` — запустить job индексации
+- `GET /api/documents/{document_id}/index-stats` — статус документа + количество чанков в индексе + последняя job
 - `GET /api/jobs` — список job индексации (filters: `status`, `document_id`)
 - `GET /api/jobs/{job_id}` — получить статус job индексации
 - `POST /api/chat/sessions` — создать chat-сессию
