@@ -411,6 +411,8 @@
 | done | 2026-04-03 | Unit/API тесты orphan cleanup workflow | `15e5b8c` |
 | done | 2026-04-03 | Защита admin cleanup endpoint через `X-Admin-API-Key` | `e7da0fb` |
 | done | 2026-04-03 | Unit/API тесты проверки admin API key для cleanup endpoint | `c05342f` |
+| done | 2026-04-03 | Ранняя валидация форматов документов при upload (`txt/docx/pdf`) | `dbd1ff1` |
+| done | 2026-04-03 | API-тест `invalid_file_type` для unsupported upload | `5bc51e6` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
