@@ -41,6 +41,7 @@ def chunk_blocks(
                     {
                         "chunk_index": chunk_index,
                         "content": fragment,
+                        "token_count": len(fragment_tokens),
                         "page": page,
                         "section": section,
                     }
