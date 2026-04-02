@@ -7,16 +7,16 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from backend.core.exceptions import ParsingError
-
-DOCX_MIME_TYPES = {
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-}
-PDF_MIME_TYPES = {"application/pdf"}
-TEXT_MIME_TYPES = {"text/plain"}
+from backend.ingestion.file_types import (
+    DOCX_MIME_TYPES,
+    PDF_MIME_TYPES,
+    TEXT_MIME_TYPES,
+    normalize_mime_type,
+)
 
 
 def parse_document(file_name: str, mime_type: str, content: bytes) -> list[dict[str, Any]]:
-    mime = (mime_type or "").split(";")[0].strip().lower()
+    mime = normalize_mime_type(mime_type)
     if not content:
         raise ParsingError(message="Uploaded file is empty", code="empty_file")
 
