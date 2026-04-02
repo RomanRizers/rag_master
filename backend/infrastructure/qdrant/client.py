@@ -1,4 +1,4 @@
-from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchAny
+from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchAny, MatchValue
 import qdrant_client
 from backend.core.config import Config
 from backend.core.exceptions import StorageError
@@ -100,3 +100,22 @@ class QdrantService:
         except Exception as error:
             raise StorageError(message="Qdrant upsert failed", details={"reason": str(error)}) from error
         logger.info("qdrant_index_finished", document_id=document_id)
+
+    def delete_document_chunks(self, document_id: str):
+        logger.info("qdrant_delete_document_chunks_started", document_id=document_id)
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=document_id),
+                        )
+                    ]
+                ),
+                wait=True,
+            )
+        except Exception as error:
+            raise StorageError(message="Qdrant delete failed", details={"reason": str(error)}) from error
+        logger.info("qdrant_delete_document_chunks_finished", document_id=document_id)

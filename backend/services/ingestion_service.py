@@ -155,6 +155,7 @@ class IngestionService:
     def _run_job_once(self, job_id: str, document_id: str):
         document = self.document_service.get_document(document_id)
         document_bytes = self.document_service.read_content(document_id)
+        self.api_service.delete_document_chunks(document_id)
 
         blocks = parse_document(
             file_name=document.file_name,

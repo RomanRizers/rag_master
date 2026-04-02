@@ -84,3 +84,16 @@ class ApiService:
                 ) from error
         logger.info("index_documents_finished", document_name=document_name, documents_count=len(documents))
         return {"status": "success", "message": f"{len(documents)} documents indexed."}
+
+    def delete_document_chunks(self, document_id: str):
+        logger.info("delete_document_chunks_started", document_id=document_id)
+        try:
+            self.qdrant_service.delete_document_chunks(document_id)
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while deleting document chunks",
+                details={"document_id": document_id, "reason": str(error)},
+            ) from error
+        logger.info("delete_document_chunks_finished", document_id=document_id)
