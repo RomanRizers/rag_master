@@ -28,6 +28,7 @@ Frontend и backend разделены по контейнерам.
 - `GET /api/documents` — список загруженных документов
 - `POST /api/documents/{document_id}/index` — запустить job индексации
 - `GET /api/documents/{document_id}/index-stats` — статус документа + количество чанков в индексе + последняя job
+- `POST /api/admin/index/orphans/cleanup` — cleanup orphan chunk-групп в индексе (`{"dry_run": true|false}`)
 - `GET /api/jobs` — список job индексации (filters: `status`, `document_id`)
 - `GET /api/jobs/{job_id}` — получить статус job индексации
 - `POST /api/chat/sessions` — создать chat-сессию
