@@ -67,12 +67,15 @@
     - `latest_job` (nullable)
 - `POST /api/admin/index/orphans/cleanup`
   - request: `{ "dry_run": true|false }`
+  - headers: `X-Admin-API-Key: <ADMIN_API_KEY>`
   - `200`:
     - `dry_run`
     - `indexed_documents_count`
     - `existing_documents_count`
     - `orphan_document_ids`
     - `deleted_documents_count`
+  - `401`:
+    - `error.code = unauthorized`
 - `GET /api/jobs/{job_id}`
   - `200`:
     - `job_id`
@@ -285,6 +288,7 @@
 - `LOCAL_LLM_API_KEY` (optional)
 - `CHUNK_SIZE_TOKENS`
 - `CHUNK_OVERLAP_TOKENS`
+- `ADMIN_API_KEY`
 
 ## 9. Тестовая стратегия
 
@@ -405,6 +409,8 @@
 | done | 2026-04-03 | Unit/API тесты для index-stats и count chunks | `1096b7f` |
 | done | 2026-04-03 | Admin cleanup endpoint для orphan chunks (`dry_run|delete`) | `accd99a` |
 | done | 2026-04-03 | Unit/API тесты orphan cleanup workflow | `15e5b8c` |
+| done | 2026-04-03 | Защита admin cleanup endpoint через `X-Admin-API-Key` | `e7da0fb` |
+| done | 2026-04-03 | Unit/API тесты проверки admin API key для cleanup endpoint | `c05342f` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
