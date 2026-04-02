@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from backend.core.exceptions import DocumentError
-from backend.ingestion.file_types import is_supported_document_type
+from backend.ingestion.file_types import resolve_upload_mime_type
 from backend.infrastructure.document_store import DocumentStore, create_document_store
 from backend.infrastructure.storage import StorageAdapter, create_storage_adapter
 
@@ -49,7 +49,12 @@ class DocumentService:
         source_name: str | None = None,
         tags: list[str] | None = None,
     ) -> dict:
-        if not is_supported_document_type(file_name=file_name, mime_type=mime_type):
+        resolved_mime = resolve_upload_mime_type(
+            file_name=file_name,
+            mime_type=mime_type,
+            content=content_bytes,
+        )
+        if resolved_mime is None:
             raise DocumentError(
                 message=f"Unsupported document type: {mime_type or 'unknown'}",
                 code="invalid_file_type",
@@ -62,7 +67,7 @@ class DocumentService:
         record = StoredDocument(
             document_id=document_id,
             file_name=file_name,
-            mime_type=mime_type or "application/octet-stream",
+            mime_type=resolved_mime,
             size_bytes=len(content_bytes),
             status="uploaded",
             source_name=source_name.strip() if isinstance(source_name, str) and source_name.strip() else None,
