@@ -367,6 +367,8 @@
 | done | 2026-04-03 | Unit-тесты SQLite chat store | `c2c0972` |
 | done | 2026-04-03 | Pluggable ingestion job store abstraction + SQLite backend | `9ad86e0` |
 | done | 2026-04-03 | Unit-тесты SQLite ingestion job store | `10d4405` |
+| done | 2026-04-03 | Pluggable document store abstraction + SQLite backend | `a1526a6` |
+| done | 2026-04-03 | Unit-тесты SQLite document store | `67d92d1` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:

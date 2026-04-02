@@ -114,6 +114,8 @@ LOCAL_LLM_API_KEY=
 ```bash
 STORAGE_BACKEND=local
 DOCUMENTS_STORAGE_PATH=/tmp/rag_documents
+DOCUMENT_STORE_BACKEND=memory
+DOCUMENT_SQLITE_PATH=/tmp/rag_documents.db
 ```
 
 Для S3/MinIO:
@@ -129,6 +131,10 @@ S3_AUTO_CREATE_BUCKET=1
 ```
 
 Поддерживаются оба варианта: `local` и `s3`.
+
+`DOCUMENT_STORE_BACKEND`:
+- `memory` — in-memory metadata store (default)
+- `sqlite` — persistent metadata store in SQLite file (`DOCUMENT_SQLITE_PATH`)
 
 ## Parser зависимости
 
