@@ -88,11 +88,17 @@ RERANK_SEMANTIC_WEIGHT=0.7
 CHAT_MAX_CONTEXT_CHARS=6000
 CHAT_STORE_BACKEND=memory
 CHAT_SQLITE_PATH=/tmp/rag_chat.db
+JOB_STORE_BACKEND=memory
+JOB_SQLITE_PATH=/tmp/rag_jobs.db
 ```
 
 `CHAT_STORE_BACKEND`:
 - `memory` — in-memory store (default)
 - `sqlite` — persistent store in SQLite file (`CHAT_SQLITE_PATH`)
+
+`JOB_STORE_BACKEND`:
+- `memory` — in-memory store (default)
+- `sqlite` — persistent store in SQLite file (`JOB_SQLITE_PATH`)
 
 Для локальной модели (OpenAI-compatible gateway):
 
