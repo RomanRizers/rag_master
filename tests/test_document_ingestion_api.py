@@ -137,6 +137,15 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["error"]["code"], "empty_file")
 
+    def test_upload_unsupported_file_type_returns_400(self):
+        response = self.client.post(
+            "/api/documents/upload",
+            files={"file": ("archive.bin", b"fake-bytes", "application/octet-stream")},
+        )
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "invalid_file_type")
+
     @patch("backend.api.routes.get_document_service")
     @patch("backend.api.routes.get_ingestion_service")
     def test_document_index_stats_endpoint(self, get_ingestion_service_mock, get_document_service_mock):
