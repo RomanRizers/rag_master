@@ -180,10 +180,12 @@ class IngestionService:
                 "keywords": [],
                 "metadata": {
                     "document_id": document_id,
+                    "chunk_id": f"{document_id}:{chunk.get('chunk_index')}",
                     "chunk_index": chunk.get("chunk_index"),
                     "token_count": chunk.get("token_count"),
                     "page": chunk.get("page"),
                     "section": chunk.get("section"),
+                    "source_uri": document.object_key,
                 },
             }
             for chunk in chunks
