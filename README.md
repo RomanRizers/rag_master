@@ -24,7 +24,7 @@ Frontend и backend разделены по контейнерам.
 
 - `POST /api/searching` — основной endpoint поиска
 - `POST /api/indexing` — основной endpoint индексации
-- `POST /api/documents/upload` — загрузить документ (multipart, поддержка: `txt/docx/pdf`)
+- `POST /api/documents/upload` — загрузить документ (multipart, поддержка: `txt/docx/pdf`, проверка сигнатуры контента + сверка с extension/MIME)
 - `GET /api/documents` — список загруженных документов
 - `POST /api/documents/{document_id}/index` — запустить job индексации
 - `GET /api/documents/{document_id}/index-stats` — статус документа + количество чанков в индексе + последняя job

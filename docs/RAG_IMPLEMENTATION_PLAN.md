@@ -413,6 +413,8 @@
 | done | 2026-04-03 | Unit/API тесты проверки admin API key для cleanup endpoint | `c05342f` |
 | done | 2026-04-03 | Ранняя валидация форматов документов при upload (`txt/docx/pdf`) | `dbd1ff1` |
 | done | 2026-04-03 | API-тест `invalid_file_type` для unsupported upload | `5bc51e6` |
+| done | 2026-04-03 | MIME-sniffing на upload с проверкой declared type vs content signature | `af959c0` |
+| done | 2026-04-03 | Python+Go тесты на spoofed upload (подмена PDF/unsupported) | `32d3e6d` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
