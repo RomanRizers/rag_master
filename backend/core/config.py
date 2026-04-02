@@ -30,6 +30,8 @@ class Config:
 
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
     DOCUMENTS_STORAGE_PATH = os.getenv("DOCUMENTS_STORAGE_PATH", "/tmp/rag_documents")
+    DOCUMENT_STORE_BACKEND = os.getenv("DOCUMENT_STORE_BACKEND", "memory").strip().lower()
+    DOCUMENT_SQLITE_PATH = os.getenv("DOCUMENT_SQLITE_PATH", "/tmp/rag_documents.db").strip()
 
     S3_ENDPOINT = os.getenv("S3_ENDPOINT", "").strip()
     S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "").strip()
