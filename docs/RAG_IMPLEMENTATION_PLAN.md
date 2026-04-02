@@ -369,6 +369,8 @@
 | done | 2026-04-03 | Unit-тесты SQLite ingestion job store | `10d4405` |
 | done | 2026-04-03 | Pluggable document store abstraction + SQLite backend | `a1526a6` |
 | done | 2026-04-03 | Unit-тесты SQLite document store | `67d92d1` |
+| done | 2026-04-03 | Lifecycle wiring: `app.state.services` + startup/shutdown close | `05cb5fe` |
+| done | 2026-04-03 | Unit-тест lifecycle и инициализации `app.state.services` | `2ae33af` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
