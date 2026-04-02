@@ -224,6 +224,25 @@ class IngestionService:
             "latest_job": latest_job,
         }
 
+    def cleanup_orphan_chunks(self, dry_run: bool = True) -> dict:
+        indexed_ids = set(self.api_service.list_indexed_document_ids())
+        existing_ids = {item["document_id"] for item in self.document_service.list_documents()}
+        orphan_ids = sorted(indexed_ids - existing_ids)
+
+        deleted_documents = 0
+        if not dry_run:
+            for orphan_id in orphan_ids:
+                self.api_service.delete_document_chunks(orphan_id)
+                deleted_documents += 1
+
+        return {
+            "dry_run": bool(dry_run),
+            "indexed_documents_count": len(indexed_ids),
+            "existing_documents_count": len(existing_ids),
+            "orphan_document_ids": orphan_ids,
+            "deleted_documents_count": deleted_documents,
+        }
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()

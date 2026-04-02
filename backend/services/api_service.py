@@ -111,3 +111,17 @@ class ApiService:
             ) from error
         logger.info("count_document_chunks_finished", document_id=document_id, chunks_count=count)
         return count
+
+    def list_indexed_document_ids(self) -> list[str]:
+        logger.info("list_indexed_document_ids_started")
+        try:
+            ids = self.qdrant_service.list_indexed_document_ids()
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while listing indexed document ids",
+                details={"reason": str(error)},
+            ) from error
+        logger.info("list_indexed_document_ids_finished", documents_count=len(ids))
+        return ids
