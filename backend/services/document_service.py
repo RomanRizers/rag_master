@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import RLock
 from uuid import uuid4
 
 from backend.core.exceptions import DocumentError
+from backend.infrastructure.document_store import DocumentStore, create_document_store
 from backend.infrastructure.storage import StorageAdapter, create_storage_adapter
 
 
@@ -36,10 +36,9 @@ class StoredDocument:
 
 
 class DocumentService:
-    def __init__(self, storage: StorageAdapter | None = None):
+    def __init__(self, storage: StorageAdapter | None = None, store: DocumentStore | None = None):
         self.storage = storage or create_storage_adapter()
-        self._documents: dict[str, StoredDocument] = {}
-        self._lock = RLock()
+        self.store = store or create_document_store()
 
     def create_document(
         self,
@@ -63,37 +62,47 @@ class DocumentService:
             created_at=_now_iso(),
             object_key=object_key,
         )
-        with self._lock:
-            self._documents[document_id] = record
+        self.store.create_document(
+            {
+                "document_id": record.document_id,
+                "file_name": record.file_name,
+                "mime_type": record.mime_type,
+                "size_bytes": record.size_bytes,
+                "status": record.status,
+                "source_name": record.source_name,
+                "tags": list(record.tags),
+                "created_at": record.created_at,
+                "object_key": record.object_key,
+            }
+        )
         return record.public_dict()
 
     def get_document(self, document_id: str) -> StoredDocument:
-        with self._lock:
-            record = self._documents.get(document_id)
-            if record is None:
-                raise DocumentError(
-                    message=f"Document not found: {document_id}",
-                    code="document_not_found",
-                    status_code=404,
-                )
-            return record
+        record = self.store.get_document(document_id)
+        if record is None:
+            raise DocumentError(
+                message=f"Document not found: {document_id}",
+                code="document_not_found",
+                status_code=404,
+            )
+        return StoredDocument(**record)
 
     def list_documents(self) -> list[dict]:
-        with self._lock:
-            items = [record.public_dict() for record in self._documents.values()]
+        items = [
+            StoredDocument(**record).public_dict()
+            for record in self.store.list_documents()
+        ]
         items.sort(key=lambda item: item["created_at"], reverse=True)
         return items
 
     def set_status(self, document_id: str, status: str):
-        with self._lock:
-            record = self._documents.get(document_id)
-            if record is None:
-                raise DocumentError(
-                    message=f"Document not found: {document_id}",
-                    code="document_not_found",
-                    status_code=404,
-                )
-            record.status = status
+        updated = self.store.set_status(document_id, status)
+        if updated is None:
+            raise DocumentError(
+                message=f"Document not found: {document_id}",
+                code="document_not_found",
+                status_code=404,
+            )
 
     def read_content(self, document_id: str) -> bytes:
         record = self.get_document(document_id)
