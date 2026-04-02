@@ -47,16 +47,24 @@ class ParserTestCase(unittest.TestCase):
 
 class ChunkerTestCase(unittest.TestCase):
     def test_chunk_blocks_splits_long_text(self):
-        blocks = [{"text": "a" * 2500, "page": 1, "section": None}]
-        chunks = chunk_blocks(blocks, chunk_size_chars=1000, chunk_overlap_chars=100)
+        blocks = [{"text": " ".join(["word"] * 250), "page": 1, "section": None}]
+        chunks = chunk_blocks(blocks, chunk_size_tokens=100, chunk_overlap_tokens=10)
         self.assertGreaterEqual(len(chunks), 3)
         self.assertEqual(chunks[0]["page"], 1)
         self.assertEqual(chunks[0]["chunk_index"], 0)
 
     def test_chunk_blocks_ignores_empty_items(self):
-        chunks = chunk_blocks([{"text": "   "}, {"text": "ok"}], chunk_size_chars=100)
+        chunks = chunk_blocks(
+            [{"text": "   "}, {"text": "ok"}],
+            chunk_size_tokens=100,
+            chunk_overlap_tokens=10,
+        )
         self.assertEqual(len(chunks), 1)
         self.assertEqual(chunks[0]["content"], "ok")
+
+    def test_chunk_blocks_validates_overlap(self):
+        with self.assertRaises(ValueError):
+            chunk_blocks([{"text": "one two"}], chunk_size_tokens=2, chunk_overlap_tokens=2)
 
 
 if __name__ == "__main__":
