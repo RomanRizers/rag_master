@@ -11,6 +11,8 @@ class Config:
     RERANK_TOP_N = int(os.getenv("RERANK_TOP_N", "8"))
     RERANK_SEMANTIC_WEIGHT = float(os.getenv("RERANK_SEMANTIC_WEIGHT", "0.7"))
     CHAT_MAX_CONTEXT_CHARS = int(os.getenv("CHAT_MAX_CONTEXT_CHARS", "6000"))
+    CHAT_STORE_BACKEND = os.getenv("CHAT_STORE_BACKEND", "memory").strip().lower()
+    CHAT_SQLITE_PATH = os.getenv("CHAT_SQLITE_PATH", "/tmp/rag_chat.db").strip()
 
     LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").strip().lower()
 
