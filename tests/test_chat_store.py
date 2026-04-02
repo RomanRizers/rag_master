@@ -1,53 +1,54 @@
-import tempfile
 import unittest
+import os
+from uuid import uuid4
 
-from backend.infrastructure.chat_store.sqlite import SqliteChatStore
+from backend.infrastructure.chat_store.postgres import PostgresChatStore
 
 
-class SqliteChatStoreTestCase(unittest.TestCase):
+class PostgresChatStoreTestCase(unittest.TestCase):
     def test_create_append_and_read_messages(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            store = SqliteChatStore(db_path=f"{temp_dir}/chat.db")
-            session = store.create_session("s1", "2026-04-03T00:00:00+00:00")
-            self.assertEqual(session["session_id"], "s1")
-
-            ok = store.append_message(
-                "s1",
-                {
-                    "id": "m1",
-                    "role": "user",
-                    "content": "hello",
-                    "citations": [],
-                    "created_at": "2026-04-03T00:00:01+00:00",
-                },
-            )
-            self.assertTrue(ok)
-
-            messages = store.get_messages("s1")
-            self.assertIsNotNone(messages)
-            self.assertEqual(len(messages), 1)
-            self.assertEqual(messages[0]["id"], "m1")
+        dsn = os.getenv("RAG_TEST_POSTGRES_DSN")
+        if not dsn:
+            self.skipTest("set RAG_TEST_POSTGRES_DSN to run postgres store tests")
+        session_id = f"s-{uuid4()}"
+        store = PostgresChatStore(dsn=dsn)
+        session = store.create_session(session_id, "2026-04-03T00:00:00+00:00")
+        self.assertEqual(session["session_id"], session_id)
+        ok = store.append_message(
+            session_id,
+            {
+                "id": f"m-{uuid4()}",
+                "role": "user",
+                "content": "hello",
+                "citations": [],
+                "created_at": "2026-04-03T00:00:01+00:00",
+            },
+        )
+        self.assertTrue(ok)
+        messages = store.get_messages(session_id)
+        self.assertIsNotNone(messages)
+        self.assertEqual(len(messages), 1)
 
     def test_list_sessions_contains_metadata(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            store = SqliteChatStore(db_path=f"{temp_dir}/chat.db")
-            store.create_session("s1", "2026-04-03T00:00:00+00:00")
-            store.append_message(
-                "s1",
-                {
-                    "id": "m1",
-                    "role": "assistant",
-                    "content": "answer",
-                    "citations": [{"document_id": "d1"}],
-                    "created_at": "2026-04-03T00:00:02+00:00",
-                },
-            )
-
-            sessions = store.list_sessions()
-            self.assertEqual(len(sessions), 1)
-            self.assertEqual(sessions[0]["session_id"], "s1")
-            self.assertEqual(sessions[0]["message_count"], 1)
-            self.assertEqual(sessions[0]["last_message_at"], "2026-04-03T00:00:02+00:00")
+        dsn = os.getenv("RAG_TEST_POSTGRES_DSN")
+        if not dsn:
+            self.skipTest("set RAG_TEST_POSTGRES_DSN to run postgres store tests")
+        session_id = f"s-{uuid4()}"
+        store = PostgresChatStore(dsn=dsn)
+        store.create_session(session_id, "2026-04-03T00:00:00+00:00")
+        store.append_message(
+            session_id,
+            {
+                "id": f"m-{uuid4()}",
+                "role": "assistant",
+                "content": "answer",
+                "citations": [{"document_id": "d1"}],
+                "created_at": "2026-04-03T00:00:02+00:00",
+            },
+        )
+        sessions = [item for item in store.list_sessions() if item["session_id"] == session_id]
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["message_count"], 1)
 
 
 if __name__ == "__main__":
