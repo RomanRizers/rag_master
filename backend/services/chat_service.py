@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from backend.core.config import Config
 from backend.core.exceptions import ValidationError
+from backend.infrastructure.chat_store import ChatStore, create_chat_store
 from backend.infrastructure.llm import create_llm_provider
 from backend.services.api_service import ApiService
 
@@ -16,44 +17,25 @@ DEFAULT_SYSTEM_PROMPT = (
 
 
 class ChatService:
-    def __init__(self, llm_provider=None, retriever=None):
+    def __init__(self, llm_provider=None, retriever=None, chat_store: ChatStore | None = None):
         self.llm_provider = llm_provider or create_llm_provider()
         self.retriever = retriever or _default_retriever
-        self._sessions: dict[str, list[dict]] = {}
-        self._session_meta: dict[str, dict] = {}
+        self.chat_store = chat_store or create_chat_store()
         self._lock = RLock()
 
     def create_session(self) -> dict:
         session_id = str(uuid4())
         created_at = _now_iso()
-        with self._lock:
-            self._sessions[session_id] = []
-            self._session_meta[session_id] = {"session_id": session_id, "created_at": created_at}
-        return {"session_id": session_id, "created_at": created_at}
+        return self.chat_store.create_session(session_id=session_id, created_at=created_at)
 
     def list_sessions(self) -> list[dict]:
-        with self._lock:
-            items = []
-            for session_id, meta in self._session_meta.items():
-                history = self._sessions.get(session_id, [])
-                last_created_at = history[-1]["created_at"] if history else None
-                items.append(
-                    {
-                        "session_id": session_id,
-                        "created_at": meta["created_at"],
-                        "message_count": len(history),
-                        "last_message_at": last_created_at,
-                    }
-                )
-        items.sort(key=lambda item: item["created_at"], reverse=True)
-        return items
+        return self.chat_store.list_sessions()
 
     def get_messages(self, session_id: str) -> list[dict]:
-        with self._lock:
-            messages = self._sessions.get(session_id)
-            if messages is None:
-                self._raise_session_not_found(session_id)
-            return list(messages)
+        messages = self.chat_store.get_messages(session_id)
+        if messages is None:
+            self._raise_session_not_found(session_id)
+        return messages
 
     def send_message(
         self,
@@ -63,7 +45,7 @@ class ChatService:
         keywords: list[str] | None = None,
     ) -> tuple[dict, dict]:
         with self._lock:
-            history = self._sessions.get(session_id)
+            history = self.chat_store.get_messages(session_id)
             if history is None:
                 self._raise_session_not_found(session_id)
 
@@ -74,6 +56,7 @@ class ChatService:
                 "citations": [],
                 "created_at": _now_iso(),
             }
+            self.chat_store.append_message(session_id, user_message)
             history.append(user_message)
 
             effective_top_k = top_k or Config.TOP_K_DEFAULT
@@ -94,7 +77,7 @@ class ChatService:
                 "citations": citations,
                 "created_at": _now_iso(),
             }
-            history.append(assistant_message)
+            self.chat_store.append_message(session_id, assistant_message)
 
             return user_message, assistant_message
 
@@ -107,7 +90,7 @@ class ChatService:
     ) -> tuple[dict, list[dict], Iterator[str]]:
         clean_message = message.strip()
         with self._lock:
-            history = self._sessions.get(session_id)
+            history = self.chat_store.get_messages(session_id)
             if history is None:
                 self._raise_session_not_found(session_id)
 
@@ -118,6 +101,7 @@ class ChatService:
                 "citations": [],
                 "created_at": _now_iso(),
             }
+            self.chat_store.append_message(session_id, user_message)
             history.append(user_message)
             llm_history = list(history)
 
@@ -143,10 +127,9 @@ class ChatService:
                 "created_at": _now_iso(),
             }
             with self._lock:
-                latest_history = self._sessions.get(session_id)
-                if latest_history is None:
+                persisted = self.chat_store.append_message(session_id, assistant_message)
+                if not persisted:
                     self._raise_session_not_found(session_id)
-                latest_history.append(assistant_message)
 
         return user_message, citations, token_stream()
 
