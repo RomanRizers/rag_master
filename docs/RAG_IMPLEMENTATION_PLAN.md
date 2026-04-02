@@ -373,6 +373,8 @@
 | done | 2026-04-03 | Unit-тест lifecycle и инициализации `app.state.services` | `2ae33af` |
 | done | 2026-04-03 | Миграция persistent store слоя: SQLite -> PostgreSQL (`chat/jobs/documents`) | `312e103` |
 | done | 2026-04-03 | Unit-тесты store-слоя переведены на PostgreSQL backend | `219b541` |
+| done | 2026-04-03 | Alembic + первая Postgres migration (`uuid/timestamptz/jsonb`) и удаление runtime schema creation | `fe35ab9` |
+| done | 2026-04-03 | Docker startup: auto `alembic upgrade head` + README runbook по миграциям | `e28b260` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
