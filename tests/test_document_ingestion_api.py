@@ -159,16 +159,28 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
 
     @patch("backend.api.routes.get_document_service")
     @patch("backend.api.routes.get_ingestion_service")
+    @patch("backend.api.dependencies.Config.ADMIN_API_KEY", "test-admin-key")
     def test_cleanup_orphan_chunks_endpoint(self, get_ingestion_service_mock, get_document_service_mock):
         get_document_service_mock.return_value = self.document_service
         get_ingestion_service_mock.return_value = self.ingestion_service
 
-        response = self.client.post("/api/admin/index/orphans/cleanup", json={"dry_run": True})
+        response = self.client.post(
+            "/api/admin/index/orphans/cleanup",
+            json={"dry_run": True},
+            headers={"X-Admin-API-Key": "test-admin-key"},
+        )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["dry_run"], True)
         self.assertEqual(payload["orphan_document_ids"], ["orphan-1"])
         self.assertEqual(payload["deleted_documents_count"], 0)
+
+    @patch("backend.api.dependencies.Config.ADMIN_API_KEY", "test-admin-key")
+    def test_cleanup_orphan_chunks_endpoint_requires_admin_key(self):
+        response = self.client.post("/api/admin/index/orphans/cleanup", json={"dry_run": True})
+        self.assertEqual(response.status_code, 401)
+        payload = response.json()
+        self.assertEqual(payload["error"]["code"], "unauthorized")
 
 
 if __name__ == "__main__":
