@@ -101,6 +101,24 @@ class ApiServiceTestCase(unittest.TestCase):
 
         self.assertEqual(context.exception.details["document_id"], "d1")
 
+    def test_list_indexed_document_ids_calls_qdrant(self):
+        mock_qdrant = Mock()
+        mock_qdrant.list_indexed_document_ids.return_value = ["d1", "d2"]
+        service = ApiService(qdrant_service=mock_qdrant, vectorizer=Mock())
+
+        result = service.list_indexed_document_ids()
+
+        self.assertEqual(result, ["d1", "d2"])
+        mock_qdrant.list_indexed_document_ids.assert_called_once_with()
+
+    def test_list_indexed_document_ids_wraps_storage_error(self):
+        mock_qdrant = Mock()
+        mock_qdrant.list_indexed_document_ids.side_effect = RuntimeError("qdrant down")
+        service = ApiService(qdrant_service=mock_qdrant, vectorizer=Mock())
+
+        with self.assertRaises(StorageError):
+            service.list_indexed_document_ids()
+
 
 if __name__ == "__main__":
     unittest.main()
