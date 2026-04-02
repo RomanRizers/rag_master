@@ -141,6 +141,11 @@ class ChatService:
             status_code=404,
         )
 
+    def close(self):
+        close_fn = getattr(self.chat_store, "close", None)
+        if callable(close_fn):
+            close_fn()
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()

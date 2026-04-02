@@ -96,6 +96,10 @@ class SqliteDocumentStore(DocumentStore):
             )
             self._conn.commit()
 
+    def close(self):
+        with self._lock:
+            self._conn.close()
+
 
 def _row_to_document(row: sqlite3.Row) -> dict:
     return {
