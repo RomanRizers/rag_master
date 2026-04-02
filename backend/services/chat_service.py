@@ -43,6 +43,7 @@ class ChatService:
         message: str,
         top_k: int | None = None,
         keywords: list[str] | None = None,
+        filters: dict | None = None,
     ) -> tuple[dict, dict]:
         with self._lock:
             history = self.chat_store.get_messages(session_id)
@@ -60,9 +61,10 @@ class ChatService:
             history.append(user_message)
 
             effective_top_k = top_k or Config.TOP_K_DEFAULT
-            retrieval = self.retriever(message.strip(), effective_top_k, keywords)
+            retrieval = self.retriever(message.strip(), effective_top_k, keywords, filters)
             search_results = retrieval.get("results", [])
-            selected_results = _select_context_results(message.strip(), search_results)
+            filtered_results = _apply_search_filters(search_results, filters)
+            selected_results = _select_context_results(message.strip(), filtered_results)
 
             context = _build_context(selected_results, Config.CHAT_MAX_CONTEXT_CHARS)
             citations = _build_citations(selected_results)
@@ -87,6 +89,7 @@ class ChatService:
         message: str,
         top_k: int | None = None,
         keywords: list[str] | None = None,
+        filters: dict | None = None,
     ) -> tuple[dict, list[dict], Iterator[str]]:
         clean_message = message.strip()
         with self._lock:
@@ -106,9 +109,10 @@ class ChatService:
             llm_history = list(history)
 
         effective_top_k = top_k or Config.TOP_K_DEFAULT
-        retrieval = self.retriever(clean_message, effective_top_k, keywords)
+        retrieval = self.retriever(clean_message, effective_top_k, keywords, filters)
         search_results = retrieval.get("results", [])
-        selected_results = _select_context_results(clean_message, search_results)
+        filtered_results = _apply_search_filters(search_results, filters)
+        selected_results = _select_context_results(clean_message, filtered_results)
         context = _build_context(selected_results, Config.CHAT_MAX_CONTEXT_CHARS)
         citations = _build_citations(selected_results)
         llm_messages = _build_llm_messages(llm_history, context)
@@ -151,8 +155,50 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _default_retriever(query: str, top_k: int, keywords: list[str] | None):
+def _default_retriever(query: str, top_k: int, keywords: list[str] | None, filters: dict | None = None):
     return ApiService().search_query(query, top_k=top_k, keywords=keywords)
+
+
+def _apply_search_filters(search_results: list[dict], filters: dict | None) -> list[dict]:
+    if not filters:
+        return search_results
+
+    document_names = {
+        str(item).strip().lower()
+        for item in (filters.get("document_names") or [])
+        if isinstance(item, str) and item.strip()
+    }
+    tags = {
+        str(item).strip().lower()
+        for item in (filters.get("tags") or [])
+        if isinstance(item, str) and item.strip()
+    }
+    if not document_names and not tags:
+        return search_results
+
+    filtered = []
+    for item in search_results:
+        payload = item.get("payload") or {}
+
+        if document_names:
+            current_name = str(payload.get("document_name") or "").strip().lower()
+            if current_name not in document_names:
+                continue
+
+        if tags:
+            payload_tags = payload.get("tags") or []
+            if isinstance(payload_tags, str):
+                payload_tags = [payload_tags]
+            normalized_tags = {
+                str(tag).strip().lower()
+                for tag in payload_tags
+                if isinstance(tag, str) and tag.strip()
+            }
+            if not normalized_tags.intersection(tags):
+                continue
+
+        filtered.append(item)
+    return filtered
 
 
 def _build_context(search_results: list[dict], max_chars: int) -> str:

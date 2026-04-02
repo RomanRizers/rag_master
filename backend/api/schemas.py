@@ -141,10 +141,31 @@ class ChatSessionMessagesResponse(BaseModel):
     messages: list[ChatMessageItem]
 
 
+class ChatFilters(BaseModel):
+    document_names: list[str] | None = None
+    tags: list[str] | None = None
+
+    @field_validator("document_names", "tags", mode="before")
+    @classmethod
+    def validate_string_list(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError("Filters fields must be lists of non-empty strings")
+
+        normalized = []
+        for item in value:
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError("Filters fields must be lists of non-empty strings")
+            normalized.append(item.strip())
+        return normalized
+
+
 class ChatMessageRequest(BaseModel):
     message: str
     top_k: int = Config.TOP_K_DEFAULT
     keywords: list[str] | None = None
+    filters: ChatFilters | None = None
 
     @field_validator("message", mode="before")
     @classmethod
