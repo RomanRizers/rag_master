@@ -19,3 +19,7 @@ class JobStore(ABC):
     @abstractmethod
     def list_jobs(self) -> list[dict]:
         raise NotImplementedError
+
+    @abstractmethod
+    def claim_next_queued(self, started_at: str) -> dict | None:
+        raise NotImplementedError

@@ -64,6 +64,31 @@ class PostgresJobStoreTestCase(unittest.TestCase):
         jobs = [item for item in store.list_jobs() if item["job_id"] in {first, second}]
         self.assertEqual(len(jobs), 2)
 
+    def test_claim_next_queued(self):
+        dsn = os.getenv("RAG_TEST_POSTGRES_DSN")
+        if not dsn:
+            self.skipTest("set RAG_TEST_POSTGRES_DSN to run postgres store tests")
+        store = PostgresJobStore(dsn=dsn)
+        first = f"j-{uuid4()}"
+        second = f"j-{uuid4()}"
+        for job_id in (first, second):
+            store.create_job(
+                {
+                    "job_id": job_id,
+                    "document_id": f"d-{uuid4()}",
+                    "status": "queued",
+                    "progress": 0,
+                    "attempt": 0,
+                    "error_code": None,
+                    "error_message": None,
+                    "started_at": None,
+                    "finished_at": None,
+                }
+            )
+        claimed = store.claim_next_queued("2026-04-03T00:00:00+00:00")
+        self.assertIsNotNone(claimed)
+        self.assertEqual(claimed["status"], "running")
+
 
 if __name__ == "__main__":
     unittest.main()
