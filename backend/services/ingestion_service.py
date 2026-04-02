@@ -180,6 +180,7 @@ class IngestionService:
                 "metadata": {
                     "document_id": document_id,
                     "chunk_index": chunk.get("chunk_index"),
+                    "token_count": chunk.get("token_count"),
                     "page": chunk.get("page"),
                     "section": chunk.get("section"),
                 },

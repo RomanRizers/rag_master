@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 import zipfile
 from typing import Any
 from xml.etree import ElementTree as ET
@@ -20,7 +21,7 @@ def parse_document(file_name: str, mime_type: str, content: bytes) -> list[dict[
         raise ParsingError(message="Uploaded file is empty", code="empty_file")
 
     if mime in TEXT_MIME_TYPES or file_name.lower().endswith(".txt"):
-        text = content.decode("utf-8", errors="replace").strip()
+        text = _normalize_text(content.decode("utf-8", errors="replace"))
         return _ensure_non_empty([{"text": text, "page": None, "section": None}])
 
     if mime in DOCX_MIME_TYPES or file_name.lower().endswith(".docx"):
@@ -47,16 +48,43 @@ def _parse_docx(content: bytes) -> list[dict[str, Any]]:
 
     root = ET.fromstring(document_xml)
     namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
-    paragraphs: list[dict[str, Any]] = []
+    blocks: list[dict[str, Any]] = []
+    current_section: str | None = None
 
-    for paragraph in root.findall(".//w:p", namespace):
-        text_nodes = paragraph.findall(".//w:t", namespace)
-        text = "".join(node.text or "" for node in text_nodes).strip()
-        if not text:
-            continue
-        paragraphs.append({"text": text, "page": None, "section": None})
+    body = root.find(".//w:body", namespace)
+    if body is None:
+        raise ParsingError(message="DOCX structure is invalid", code="parsing_failed")
 
-    return _ensure_non_empty(paragraphs)
+    for element in body:
+        tag = _local_name(element.tag)
+        if tag == "p":
+            paragraph_text = _extract_paragraph_text(element, namespace)
+            if not paragraph_text:
+                continue
+
+            heading_level = _extract_heading_level(element, namespace)
+            if heading_level is not None:
+                current_section = paragraph_text
+                blocks.append(
+                    {
+                        "text": f"[SECTION H{heading_level}] {paragraph_text}",
+                        "page": None,
+                        "section": current_section,
+                    }
+                )
+                continue
+
+            blocks.append({"text": paragraph_text, "page": None, "section": current_section})
+
+        if tag == "tbl":
+            rows = _extract_table_rows(element, namespace)
+            for row in rows:
+                if not row:
+                    continue
+                row_text = " | ".join(row)
+                blocks.append({"text": f"[TABLE] {row_text}", "page": None, "section": current_section})
+
+    return _ensure_non_empty(blocks)
 
 
 def _parse_pdf(content: bytes) -> list[dict[str, Any]]:
@@ -73,7 +101,7 @@ def _parse_pdf(content: bytes) -> list[dict[str, Any]]:
         reader = PdfReader(io.BytesIO(content))
         pages: list[dict[str, Any]] = []
         for index, page in enumerate(reader.pages, start=1):
-            text = (page.extract_text() or "").strip()
+            text = _normalize_text(page.extract_text() or "")
             if not text:
                 continue
             pages.append({"text": text, "page": index, "section": None})
@@ -84,7 +112,68 @@ def _parse_pdf(content: bytes) -> list[dict[str, Any]]:
 
 
 def _ensure_non_empty(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    filtered = [item for item in blocks if (item.get("text") or "").strip()]
+    filtered = []
+    for item in blocks:
+        text = _normalize_text(item.get("text") or "")
+        if not text:
+            continue
+        normalized_item = dict(item)
+        normalized_item["text"] = text
+        filtered.append(normalized_item)
     if not filtered:
         raise ParsingError(message="No readable text found in document", code="parsing_failed")
     return filtered
+
+
+def _normalize_text(value: str) -> str:
+    collapsed = re.sub(r"\s+", " ", str(value or "")).strip()
+    return collapsed
+
+
+def _extract_paragraph_text(paragraph: ET.Element, namespace: dict[str, str]) -> str:
+    text_nodes = paragraph.findall(".//w:t", namespace)
+    raw_text = "".join(node.text or "" for node in text_nodes)
+    return _normalize_text(raw_text)
+
+
+def _extract_heading_level(paragraph: ET.Element, namespace: dict[str, str]) -> int | None:
+    style = paragraph.find("./w:pPr/w:pStyle", namespace)
+    if style is None:
+        return None
+
+    value = (
+        style.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val")
+        or style.get("w:val")
+        or style.get("val")
+        or ""
+    ).strip()
+    if not value.lower().startswith("heading"):
+        return None
+
+    level_part = value[len("heading") :]
+    if level_part.isdigit():
+        return int(level_part)
+    return 1
+
+
+def _extract_table_rows(table: ET.Element, namespace: dict[str, str]) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for row in table.findall("./w:tr", namespace):
+        cells: list[str] = []
+        for cell in row.findall("./w:tc", namespace):
+            cell_text_fragments: list[str] = []
+            for paragraph in cell.findall(".//w:p", namespace):
+                paragraph_text = _extract_paragraph_text(paragraph, namespace)
+                if paragraph_text:
+                    cell_text_fragments.append(paragraph_text)
+            cell_text = _normalize_text(" ".join(cell_text_fragments))
+            if cell_text:
+                cells.append(cell_text)
+        rows.append(cells)
+    return rows
+
+
+def _local_name(tag: str) -> str:
+    if "}" in tag:
+        return tag.rsplit("}", maxsplit=1)[1]
+    return tag
