@@ -16,7 +16,8 @@ class _FakeLLMProvider:
         yield "reply"
 
 
-def _fake_retriever(query, top_k, keywords):
+def _fake_retriever(query, top_k, keywords, filters=None):
+    _ = (query, top_k, keywords, filters)
     return {
         "results": [
             {
@@ -25,10 +26,20 @@ def _fake_retriever(query, top_k, keywords):
                     "document_name": "TestDoc.pdf",
                     "page": 3,
                     "content": "Это релевантный фрагмент для ответа ассистента.",
+                    "tags": ["finance", "contracts"],
                 },
-            }
+            },
+            {
+                "id": "chunk-2",
+                "payload": {
+                    "document_name": "OtherDoc.pdf",
+                    "page": 1,
+                    "content": "Другой фрагмент для проверки фильтра.",
+                    "tags": ["hr"],
+                },
+            },
         ],
-        "total": 1,
+        "total": 2,
     }
 
 
@@ -53,8 +64,10 @@ class ChatApiTestCase(unittest.TestCase):
         self.assertEqual(send_response.status_code, 200)
         payload = send_response.json()
         self.assertEqual(payload["assistant_message"]["content"], "assistant reply")
-        self.assertEqual(len(payload["assistant_message"]["citations"]), 1)
-        self.assertEqual(payload["assistant_message"]["citations"][0]["document_name"], "TestDoc.pdf")
+        citations = payload["assistant_message"]["citations"]
+        self.assertGreaterEqual(len(citations), 1)
+        citation_names = {item["document_name"] for item in citations}
+        self.assertIn("TestDoc.pdf", citation_names)
 
         history_response = self.client.get(f"/api/chat/sessions/{session_id}/messages")
         self.assertEqual(history_response.status_code, 200)
@@ -108,6 +121,40 @@ class ChatApiTestCase(unittest.TestCase):
         self.assertIn("event: delta", raw)
         self.assertIn("event: citations", raw)
         self.assertIn("event: done", raw)
+
+    @patch("backend.api.routes.get_chat_service")
+    def test_send_message_supports_filters(self, get_chat_service_mock):
+        get_chat_service_mock.return_value = self.chat_service
+
+        create_response = self.client.post("/api/chat/sessions")
+        session_id = create_response.json()["session_id"]
+
+        send_response = self.client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            json={
+                "message": "hello",
+                "filters": {"document_names": ["TestDoc.pdf"], "tags": ["finance"]},
+            },
+        )
+        self.assertEqual(send_response.status_code, 200)
+        payload = send_response.json()
+        citations = payload["assistant_message"]["citations"]
+        self.assertEqual(len(citations), 1)
+        self.assertEqual(citations[0]["document_name"], "TestDoc.pdf")
+
+    @patch("backend.api.routes.get_chat_service")
+    def test_send_message_rejects_invalid_filters(self, get_chat_service_mock):
+        get_chat_service_mock.return_value = self.chat_service
+
+        create_response = self.client.post("/api/chat/sessions")
+        session_id = create_response.json()["session_id"]
+
+        response = self.client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            json={"message": "hello", "filters": {"document_names": "bad"}},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"]["code"], "invalid_field")
 
 
 if __name__ == "__main__":

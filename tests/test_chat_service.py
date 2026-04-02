@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from backend.services.chat_service import _build_context, _select_context_results
+from backend.services.chat_service import _apply_search_filters, _build_context, _select_context_results
 
 
 class ChatServiceRankingTestCase(unittest.TestCase):
@@ -48,6 +48,33 @@ class ChatServiceRankingTestCase(unittest.TestCase):
         context = _build_context(results, max_chars=120)
         self.assertIn("[1]", context)
         self.assertNotIn("[2]", context)
+
+    def test_apply_search_filters_by_document_name(self):
+        results = [
+            {"id": "a", "payload": {"document_name": "A.pdf", "tags": ["x"]}},
+            {"id": "b", "payload": {"document_name": "B.pdf", "tags": ["y"]}},
+        ]
+        filtered = _apply_search_filters(results, {"document_names": ["b.pdf"]})
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["id"], "b")
+
+    def test_apply_search_filters_by_tags(self):
+        results = [
+            {"id": "a", "payload": {"document_name": "A.pdf", "tags": ["finance", "sales"]}},
+            {"id": "b", "payload": {"document_name": "B.pdf", "tags": ["hr"]}},
+        ]
+        filtered = _apply_search_filters(results, {"tags": ["sales"]})
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["id"], "a")
+
+    def test_apply_search_filters_combines_name_and_tags(self):
+        results = [
+            {"id": "a", "payload": {"document_name": "A.pdf", "tags": ["finance"]}},
+            {"id": "b", "payload": {"document_name": "A.pdf", "tags": ["hr"]}},
+        ]
+        filtered = _apply_search_filters(results, {"document_names": ["A.pdf"], "tags": ["finance"]})
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["id"], "a")
 
 
 if __name__ == "__main__":
