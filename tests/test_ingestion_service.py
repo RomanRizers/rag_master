@@ -150,8 +150,10 @@ class IngestionServiceTestCase(unittest.TestCase):
             self.assertEqual(len(api_service.last_documents), 1)
             metadata = api_service.last_documents[0]["metadata"]
             self.assertEqual(metadata["document_id"], record["document_id"])
+            self.assertEqual(metadata["chunk_id"], f"{record['document_id']}:0")
             self.assertEqual(metadata["chunk_index"], 0)
             self.assertEqual(metadata["token_count"], 4)
+            self.assertEqual(metadata["source_uri"], f"{record['document_id']}/doc.txt")
 
 
 if __name__ == "__main__":
