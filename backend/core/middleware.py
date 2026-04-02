@@ -3,7 +3,10 @@ import uuid
 
 import structlog
 from fastapi import Request
+from fastapi.responses import JSONResponse
 
+from backend.core.rate_limit import classify_rate_limit_bucket
+from backend.core.responses import error_response_payload
 
 logger = structlog.get_logger("http")
 
@@ -42,3 +45,27 @@ async def request_logging_middleware(request: Request, call_next):
             status_code=status_code,
             duration_ms=duration_ms,
         )
+
+
+async def rate_limit_middleware(request: Request, call_next):
+    limiter = getattr(request.app.state, "rate_limiter", None)
+    if limiter is None:
+        return await call_next(request)
+
+    bucket = classify_rate_limit_bucket(request.method, request.url.path)
+    if bucket is None:
+        return await call_next(request)
+
+    client_id = request.client.host if request.client else "unknown"
+    allowed, retry_after = limiter.check(bucket=bucket, identity=client_id)
+    if not allowed:
+        return JSONResponse(
+            content=error_response_payload(
+                code="rate_limited",
+                message=f"Rate limit exceeded for {bucket}",
+                details={"bucket": bucket, "retry_after_seconds": retry_after},
+            ),
+            status_code=429,
+        )
+
+    return await call_next(request)

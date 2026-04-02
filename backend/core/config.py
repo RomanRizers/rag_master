@@ -36,6 +36,10 @@ class Config:
     INGESTION_RETRY_BACKOFF_SECONDS = float(os.getenv("INGESTION_RETRY_BACKOFF_SECONDS", "0.5"))
     MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "25"))
     MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "1").strip() in {"1", "true", "yes"}
+    RATE_LIMIT_UPLOAD_RPM = int(os.getenv("RATE_LIMIT_UPLOAD_RPM", "30"))
+    RATE_LIMIT_INDEXING_RPM = int(os.getenv("RATE_LIMIT_INDEXING_RPM", "60"))
+    RATE_LIMIT_CHAT_RPM = int(os.getenv("RATE_LIMIT_CHAT_RPM", "120"))
     ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "change-me").strip()
 
     S3_ENDPOINT = os.getenv("S3_ENDPOINT", "").strip()
