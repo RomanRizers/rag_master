@@ -12,6 +12,7 @@ FastAPI + Qdrant сервис поиска параграфов по векто�
 
 - `frontend` — React SPA (Vite + TypeScript + React Query), отдается через Nginx
 - `backend-app` — backend API (FastAPI)
+- `postgres` — персистентное хранилище metadata/чатов/джоб
 - `qdrant` — векторная база
 
 Frontend и backend разделены по контейнерам.
@@ -48,6 +49,7 @@ Frontend и backend разделены по контейнерам.
 
 ```bash
 uv sync
+uv run alembic upgrade head
 uv run uvicorn backend.main:app --host 0.0.0.0 --port 5000
 ```
 
@@ -64,6 +66,7 @@ docker compose up --build -d
 - Qdrant HTTP: `http://localhost:6334`
 - MinIO API: `http://localhost:9000`
 - MinIO Console: `http://localhost:9001`
+- Postgres: `localhost:5432`
 
 ## Hugging Face token (рекомендуется)
 
@@ -171,6 +174,18 @@ RAG_RUN_SLOW_E2E=1 go test ./tests -v -run TestOptionalIndexAndSearchFlow
 
 ```bash
 uv run python -m unittest discover -s tests
+```
+
+## Миграции Postgres
+
+```bash
+uv run alembic upgrade head
+```
+
+Откат на один шаг:
+
+```bash
+uv run alembic downgrade -1
 ```
 
 ## Тесты frontend
