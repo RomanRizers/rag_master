@@ -1,29 +1,30 @@
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
 from threading import RLock
+
+import psycopg
 
 from backend.infrastructure.job_store.base import JobStore
 
 
-class SqliteJobStore(JobStore):
-    def __init__(self, db_path: str):
-        self._db_path = db_path
+class PostgresJobStore(JobStore):
+    def __init__(self, dsn: str):
+        self._dsn = dsn
         self._lock = RLock()
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
+        self._conn = psycopg.connect(dsn)
+        self._conn.autocommit = True
         self._ensure_schema()
 
     def create_job(self, job: dict) -> dict:
-        with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO ingestion_jobs(
-                    job_id, document_id, status, progress, attempt, error_code, error_message, started_at, finished_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+        query = """
+            INSERT INTO ingestion_jobs(
+                job_id, document_id, status, progress, attempt, error_code, error_message, started_at, finished_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(
+                query,
                 (
                     job["job_id"],
                     job["document_id"],
@@ -36,19 +37,17 @@ class SqliteJobStore(JobStore):
                     job.get("finished_at"),
                 ),
             )
-            self._conn.commit()
         return self.get_job(job["job_id"]) or dict(job)
 
     def get_job(self, job_id: str) -> dict | None:
-        with self._lock:
-            row = self._conn.execute(
-                """
-                SELECT job_id, document_id, status, progress, attempt, error_code, error_message, started_at, finished_at
-                FROM ingestion_jobs
-                WHERE job_id = ?
-                """,
-                (job_id,),
-            ).fetchone()
+        query = """
+            SELECT job_id, document_id, status, progress, attempt, error_code, error_message, started_at, finished_at
+            FROM ingestion_jobs
+            WHERE job_id = %s
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query, (job_id,))
+            row = cursor.fetchone()
         if row is None:
             return None
         return _row_to_job(row)
@@ -59,13 +58,14 @@ class SqliteJobStore(JobStore):
             raise KeyError(job_id)
         updated = dict(current)
         updated.update(changes)
-        with self._lock:
-            self._conn.execute(
-                """
-                UPDATE ingestion_jobs
-                SET status = ?, progress = ?, attempt = ?, error_code = ?, error_message = ?, started_at = ?, finished_at = ?
-                WHERE job_id = ?
-                """,
+        query = """
+            UPDATE ingestion_jobs
+            SET status = %s, progress = %s, attempt = %s, error_code = %s, error_message = %s, started_at = %s, finished_at = %s
+            WHERE job_id = %s
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(
+                query,
                 (
                     updated["status"],
                     int(updated["progress"]),
@@ -77,25 +77,21 @@ class SqliteJobStore(JobStore):
                     job_id,
                 ),
             )
-            self._conn.commit()
         return updated
 
     def list_jobs(self) -> list[dict]:
-        with self._lock:
-            rows = self._conn.execute(
-                """
-                SELECT job_id, document_id, status, progress, attempt, error_code, error_message, started_at, finished_at
-                FROM ingestion_jobs
-                """
-            ).fetchall()
+        query = """
+            SELECT job_id, document_id, status, progress, attempt, error_code, error_message, started_at, finished_at
+            FROM ingestion_jobs
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
         return [_row_to_job(row) for row in rows]
 
     def _ensure_schema(self):
-        path = Path(self._db_path)
-        if path.parent:
-            path.parent.mkdir(parents=True, exist_ok=True)
-        with self._lock:
-            self._conn.execute(
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS ingestion_jobs(
                     job_id TEXT PRIMARY KEY,
@@ -110,25 +106,24 @@ class SqliteJobStore(JobStore):
                 )
                 """
             )
-            self._conn.execute(
+            cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_document_id ON ingestion_jobs(document_id)"
             )
-            self._conn.commit()
 
     def close(self):
         with self._lock:
             self._conn.close()
 
 
-def _row_to_job(row: sqlite3.Row) -> dict:
+def _row_to_job(row: tuple) -> dict:
     return {
-        "job_id": row["job_id"],
-        "document_id": row["document_id"],
-        "status": row["status"],
-        "progress": int(row["progress"]),
-        "attempt": int(row["attempt"]),
-        "error_code": row["error_code"],
-        "error_message": row["error_message"],
-        "started_at": row["started_at"],
-        "finished_at": row["finished_at"],
+        "job_id": row[0],
+        "document_id": row[1],
+        "status": row[2],
+        "progress": int(row[3]),
+        "attempt": int(row[4]),
+        "error_code": row[5],
+        "error_message": row[6],
+        "started_at": row[7],
+        "finished_at": row[8],
     }

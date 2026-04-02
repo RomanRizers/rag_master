@@ -12,9 +12,7 @@ class Config:
     RERANK_SEMANTIC_WEIGHT = float(os.getenv("RERANK_SEMANTIC_WEIGHT", "0.7"))
     CHAT_MAX_CONTEXT_CHARS = int(os.getenv("CHAT_MAX_CONTEXT_CHARS", "6000"))
     CHAT_STORE_BACKEND = os.getenv("CHAT_STORE_BACKEND", "memory").strip().lower()
-    CHAT_SQLITE_PATH = os.getenv("CHAT_SQLITE_PATH", "/tmp/rag_chat.db").strip()
     JOB_STORE_BACKEND = os.getenv("JOB_STORE_BACKEND", "memory").strip().lower()
-    JOB_SQLITE_PATH = os.getenv("JOB_SQLITE_PATH", "/tmp/rag_jobs.db").strip()
 
     LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").strip().lower()
 
@@ -31,7 +29,7 @@ class Config:
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
     DOCUMENTS_STORAGE_PATH = os.getenv("DOCUMENTS_STORAGE_PATH", "/tmp/rag_documents")
     DOCUMENT_STORE_BACKEND = os.getenv("DOCUMENT_STORE_BACKEND", "memory").strip().lower()
-    DOCUMENT_SQLITE_PATH = os.getenv("DOCUMENT_SQLITE_PATH", "/tmp/rag_documents.db").strip()
+    POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql://rag:rag@postgres:5432/rag").strip()
 
     S3_ENDPOINT = os.getenv("S3_ENDPOINT", "").strip()
     S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "").strip()

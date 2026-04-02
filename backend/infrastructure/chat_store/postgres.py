@@ -1,31 +1,28 @@
 from __future__ import annotations
 
 import json
-import sqlite3
-from pathlib import Path
 from threading import RLock
+
+import psycopg
 
 from backend.infrastructure.chat_store.base import ChatStore
 
 
-class SqliteChatStore(ChatStore):
-    def __init__(self, db_path: str):
-        self._db_path = db_path
+class PostgresChatStore(ChatStore):
+    def __init__(self, dsn: str):
+        self._dsn = dsn
         self._lock = RLock()
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
+        self._conn = psycopg.connect(dsn)
+        self._conn.autocommit = True
         self._ensure_schema()
 
     def create_session(self, session_id: str, created_at: str) -> dict:
-        with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO chat_sessions(session_id, created_at)
-                VALUES (?, ?)
-                """,
-                (session_id, created_at),
-            )
-            self._conn.commit()
+        query = """
+            INSERT INTO chat_sessions(session_id, created_at)
+            VALUES (%s, %s)
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query, (session_id, created_at))
         return {"session_id": session_id, "created_at": created_at}
 
     def list_sessions(self) -> list[dict]:
@@ -40,61 +37,59 @@ class SqliteChatStore(ChatStore):
             GROUP BY s.session_id, s.created_at
             ORDER BY s.created_at DESC
         """
-        with self._lock:
-            rows = self._conn.execute(query).fetchall()
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
         return [
             {
-                "session_id": row["session_id"],
-                "created_at": row["created_at"],
-                "message_count": int(row["message_count"] or 0),
-                "last_message_at": row["last_message_at"],
+                "session_id": row[0],
+                "created_at": row[1],
+                "message_count": int(row[2] or 0),
+                "last_message_at": row[3],
             }
             for row in rows
         ]
 
     def get_messages(self, session_id: str) -> list[dict] | None:
-        with self._lock:
-            session = self._conn.execute(
-                "SELECT 1 FROM chat_sessions WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()
-            if session is None:
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM chat_sessions WHERE session_id = %s", (session_id,))
+            if cursor.fetchone() is None:
                 return None
-            rows = self._conn.execute(
+
+            cursor.execute(
                 """
                 SELECT message_id, role, content, citations_json, created_at
                 FROM chat_messages
-                WHERE session_id = ?
+                WHERE session_id = %s
                 ORDER BY created_at ASC, message_id ASC
                 """,
                 (session_id,),
-            ).fetchall()
+            )
+            rows = cursor.fetchall()
+
         return [
             {
-                "id": row["message_id"],
-                "role": row["role"],
-                "content": row["content"],
-                "citations": json.loads(row["citations_json"] or "[]"),
-                "created_at": row["created_at"],
+                "id": row[0],
+                "role": row[1],
+                "content": row[2],
+                "citations": json.loads(row[3] or "[]"),
+                "created_at": row[4],
             }
             for row in rows
         ]
 
     def append_message(self, session_id: str, message: dict) -> bool:
-        with self._lock:
-            session = self._conn.execute(
-                "SELECT 1 FROM chat_sessions WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()
-            if session is None:
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM chat_sessions WHERE session_id = %s", (session_id,))
+            if cursor.fetchone() is None:
                 return False
 
-            self._conn.execute(
+            cursor.execute(
                 """
                 INSERT INTO chat_messages(
                     message_id, session_id, role, content, citations_json, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """,
                 (
                     message["id"],
@@ -105,15 +100,11 @@ class SqliteChatStore(ChatStore):
                     message["created_at"],
                 ),
             )
-            self._conn.commit()
         return True
 
     def _ensure_schema(self):
-        path = Path(self._db_path)
-        if path.parent:
-            path.parent.mkdir(parents=True, exist_ok=True)
-        with self._lock:
-            self._conn.execute(
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS chat_sessions(
                     session_id TEXT PRIMARY KEY,
@@ -121,7 +112,7 @@ class SqliteChatStore(ChatStore):
                 )
                 """
             )
-            self._conn.execute(
+            cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS chat_messages(
                     message_id TEXT PRIMARY KEY,
@@ -134,11 +125,10 @@ class SqliteChatStore(ChatStore):
                 )
                 """
             )
-            self._conn.execute(
+            cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created "
                 "ON chat_messages(session_id, created_at)"
             )
-            self._conn.commit()
 
     def close(self):
         with self._lock:
