@@ -110,6 +110,12 @@ func TestUploadSpoofedPDFReturnsValidationError(t *testing.T) {
 	assertErrorCode(t, resp, http.StatusBadRequest, "invalid_file_type")
 }
 
+func TestUploadTooLargeReturnsValidationError(t *testing.T) {
+	largeContent := bytes.Repeat([]byte("a"), 26*1024*1024)
+	resp := postMultipartDocument(t, "/api/documents/upload", "large.txt", largeContent)
+	assertErrorCode(t, resp, http.StatusRequestEntityTooLarge, "file_too_large")
+}
+
 func TestStartIndexAndGetJobStatusEndpoints(t *testing.T) {
 	uploadResp := postMultipartDocument(t, "/api/documents/upload", "index-me.txt", []byte("index me please"))
 	if uploadResp.StatusCode != http.StatusCreated {
