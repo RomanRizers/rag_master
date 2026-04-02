@@ -8,6 +8,8 @@ class Config:
     MODEL_NAME = os.getenv("MODEL_NAME", "d0rj/e5-base-en-ru")
     TOP_K_DEFAULT = int(os.getenv("TOP_K_DEFAULT", "5"))
     TOP_K_MAX = int(os.getenv("TOP_K_MAX", "50"))
+    CHUNK_SIZE_TOKENS = int(os.getenv("CHUNK_SIZE_TOKENS", "600"))
+    CHUNK_OVERLAP_TOKENS = int(os.getenv("CHUNK_OVERLAP_TOKENS", "120"))
     RERANK_TOP_N = int(os.getenv("RERANK_TOP_N", "8"))
     RERANK_SEMANTIC_WEIGHT = float(os.getenv("RERANK_SEMANTIC_WEIGHT", "0.7"))
     CHAT_MAX_CONTEXT_CHARS = int(os.getenv("CHAT_MAX_CONTEXT_CHARS", "6000"))
