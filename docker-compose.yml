@@ -62,6 +62,43 @@ services:
     networks:
       - qdrant-network
 
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: worker
+    volumes:
+      - .:/app
+      - hf-cache:/root/.cache/huggingface
+      - documents-storage:/tmp/rag_documents
+    environment:
+      - POSTGRES_DSN=${POSTGRES_DSN:-postgresql://rag:rag@postgres:5432/rag}
+      - CHAT_STORE_BACKEND=${CHAT_STORE_BACKEND:-postgres}
+      - JOB_STORE_BACKEND=${JOB_STORE_BACKEND:-postgres}
+      - DOCUMENT_STORE_BACKEND=${DOCUMENT_STORE_BACKEND:-postgres}
+      - UV_PROJECT_ENVIRONMENT=/opt/venv
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/root/.cache/huggingface
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
+      - DOCUMENTS_STORAGE_PATH=${DOCUMENTS_STORAGE_PATH:-/tmp/rag_documents}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-minioadmin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-rag-documents}
+      - S3_REGION=${S3_REGION:-us-east-1}
+      - S3_AUTO_CREATE_BUCKET=${S3_AUTO_CREATE_BUCKET:-1}
+      - INGESTION_WORKER_POLL_SECONDS=${INGESTION_WORKER_POLL_SECONDS:-1.0}
+    depends_on:
+      qdrant:
+        condition: service_started
+      minio:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    command: sh -c "uv run alembic upgrade head && uv run python -m backend.worker.main"
+    networks:
+      - qdrant-network
+
   minio:
     image: minio/minio:latest
     container_name: minio
