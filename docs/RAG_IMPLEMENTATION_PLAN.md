@@ -365,6 +365,8 @@
 | done | 2026-04-02 | `GET /api/chat/sessions` endpoint + chat API test | `0e3cfb9` |
 | done | 2026-04-03 | Pluggable chat store abstraction + SQLite backend | `4f7cc48` |
 | done | 2026-04-03 | Unit-тесты SQLite chat store | `c2c0972` |
+| done | 2026-04-03 | Pluggable ingestion job store abstraction + SQLite backend | `9ad86e0` |
+| done | 2026-04-03 | Unit-тесты SQLite ingestion job store | `10d4405` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
