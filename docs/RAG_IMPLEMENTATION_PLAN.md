@@ -383,6 +383,8 @@
 | done | 2026-04-03 | Unit-тесты chunker обновлены под token slicing + overlap validation | `655a9eb` |
 | done | 2026-04-03 | Parser hardening: whitespace normalization + DOCX sections/tables extraction | `0977521` |
 | done | 2026-04-03 | Unit-тесты parser/ingestion metadata (`token_count`) | `0ad8a1a` |
+| done | 2026-04-03 | Reindex safety: удаление старых chunk points в Qdrant перед новой индексацией | `f6930d9` |
+| done | 2026-04-03 | Unit-тесты cleanup шага (api_service + ingestion) | `4d43af3` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:
