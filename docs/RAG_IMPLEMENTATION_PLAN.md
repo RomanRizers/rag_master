@@ -128,6 +128,7 @@
 - `retrieval_failed`
 - `llm_unavailable`
 - `internal_error`
+- `rate_limited`
 
 ## 4. Модель данных
 
@@ -290,6 +291,10 @@
 - `CHUNK_OVERLAP_TOKENS`
 - `MAX_UPLOAD_SIZE_MB`
 - `ADMIN_API_KEY`
+- `RATE_LIMIT_ENABLED`
+- `RATE_LIMIT_UPLOAD_RPM`
+- `RATE_LIMIT_INDEXING_RPM`
+- `RATE_LIMIT_CHAT_RPM`
 
 ## 9. Тестовая стратегия
 
@@ -418,6 +423,8 @@
 | done | 2026-04-03 | Python+Go тесты на spoofed upload (подмена PDF/unsupported) | `32d3e6d` |
 | done | 2026-04-03 | Лимит размера upload (`MAX_UPLOAD_SIZE_MB`) + ошибка `file_too_large` (413) | `7828492` |
 | done | 2026-04-03 | Python+Go тесты на превышение лимита upload | `1ff1efd` |
+| done | 2026-04-03 | In-memory rate limiting middleware для `upload/index/chat` | `329a440` |
+| done | 2026-04-03 | Unit-тесты middleware rate limiting (`429`, disabled mode) | `34d2eb5` |
 
 ### Правило ведения трекера
 - После каждого нового коммита:

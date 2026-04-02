@@ -37,6 +37,8 @@ Frontend и backend разделены по контейнерам.
 - `POST /api/chat/sessions/{session_id}/messages/stream` — SSE-streaming ответа
 - `GET /api/chat/sessions/{session_id}/messages` — получить историю сообщений
 
+Для `upload/index/chat` включен in-memory rate limiting; при превышении вернется `429` и код `rate_limited`.
+
 ### Legacy compatibility
 
 - `POST /searching` -> алиас к `/api/searching`
@@ -98,6 +100,10 @@ CHAT_STORE_BACKEND=memory
 JOB_STORE_BACKEND=memory
 POSTGRES_DSN=postgresql://rag:rag@postgres:5432/rag
 MAX_UPLOAD_SIZE_MB=25
+RATE_LIMIT_ENABLED=1
+RATE_LIMIT_UPLOAD_RPM=30
+RATE_LIMIT_INDEXING_RPM=60
+RATE_LIMIT_CHAT_RPM=120
 ADMIN_API_KEY=change-me
 ```
 
