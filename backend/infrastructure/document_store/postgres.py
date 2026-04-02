@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from threading import RLock
 
 import psycopg
@@ -14,14 +15,13 @@ class PostgresDocumentStore(DocumentStore):
         self._lock = RLock()
         self._conn = psycopg.connect(dsn)
         self._conn.autocommit = True
-        self._ensure_schema()
 
     def create_document(self, document: dict) -> dict:
         query = """
             INSERT INTO documents(
                 document_id, file_name, mime_type, size_bytes, status, source_name, tags_json, created_at, object_key
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s::uuid, %s, %s, %s, %s, %s, %s::jsonb, %s::timestamptz, %s)
         """
         with self._lock, self._conn.cursor() as cursor:
             cursor.execute(
@@ -44,7 +44,7 @@ class PostgresDocumentStore(DocumentStore):
         query = """
             SELECT document_id, file_name, mime_type, size_bytes, status, source_name, tags_json, created_at, object_key
             FROM documents
-            WHERE document_id = %s
+            WHERE document_id = %s::uuid
         """
         with self._lock, self._conn.cursor() as cursor:
             cursor.execute(query, (document_id,))
@@ -67,28 +67,10 @@ class PostgresDocumentStore(DocumentStore):
     def set_status(self, document_id: str, status: str) -> dict | None:
         with self._lock, self._conn.cursor() as cursor:
             cursor.execute(
-                "UPDATE documents SET status = %s WHERE document_id = %s",
+                "UPDATE documents SET status = %s WHERE document_id = %s::uuid",
                 (status, document_id),
             )
         return self.get_document(document_id)
-
-    def _ensure_schema(self):
-        with self._lock, self._conn.cursor() as cursor:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS documents(
-                    document_id TEXT PRIMARY KEY,
-                    file_name TEXT NOT NULL,
-                    mime_type TEXT NOT NULL,
-                    size_bytes INTEGER NOT NULL,
-                    status TEXT NOT NULL,
-                    source_name TEXT,
-                    tags_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    object_key TEXT NOT NULL
-                )
-                """
-            )
 
     def close(self):
         with self._lock:
@@ -97,13 +79,31 @@ class PostgresDocumentStore(DocumentStore):
 
 def _row_to_document(row: tuple) -> dict:
     return {
-        "document_id": row[0],
+        "document_id": str(row[0]),
         "file_name": row[1],
         "mime_type": row[2],
         "size_bytes": int(row[3]),
         "status": row[4],
         "source_name": row[5],
-        "tags": json.loads(row[6] or "[]"),
-        "created_at": row[7],
+        "tags": _parse_json_value(row[6]),
+        "created_at": _to_iso(row[7]),
         "object_key": row[8],
     }
+
+
+def _to_iso(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def _parse_json_value(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, dict)):
+        return value
+    if isinstance(value, str):
+        return json.loads(value or "[]")
+    return value

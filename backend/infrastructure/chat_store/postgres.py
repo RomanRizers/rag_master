@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from threading import RLock
 
 import psycopg
@@ -14,16 +15,15 @@ class PostgresChatStore(ChatStore):
         self._lock = RLock()
         self._conn = psycopg.connect(dsn)
         self._conn.autocommit = True
-        self._ensure_schema()
 
     def create_session(self, session_id: str, created_at: str) -> dict:
         query = """
             INSERT INTO chat_sessions(session_id, created_at)
-            VALUES (%s, %s)
+            VALUES (%s::uuid, %s::timestamptz)
         """
         with self._lock, self._conn.cursor() as cursor:
             cursor.execute(query, (session_id, created_at))
-        return {"session_id": session_id, "created_at": created_at}
+        return {"session_id": session_id, "created_at": _to_iso(created_at)}
 
     def list_sessions(self) -> list[dict]:
         query = """
@@ -42,17 +42,17 @@ class PostgresChatStore(ChatStore):
             rows = cursor.fetchall()
         return [
             {
-                "session_id": row[0],
-                "created_at": row[1],
+                "session_id": str(row[0]),
+                "created_at": _to_iso(row[1]),
                 "message_count": int(row[2] or 0),
-                "last_message_at": row[3],
+                "last_message_at": _to_iso(row[3]),
             }
             for row in rows
         ]
 
     def get_messages(self, session_id: str) -> list[dict] | None:
         with self._lock, self._conn.cursor() as cursor:
-            cursor.execute("SELECT 1 FROM chat_sessions WHERE session_id = %s", (session_id,))
+            cursor.execute("SELECT 1 FROM chat_sessions WHERE session_id = %s::uuid", (session_id,))
             if cursor.fetchone() is None:
                 return None
 
@@ -60,7 +60,7 @@ class PostgresChatStore(ChatStore):
                 """
                 SELECT message_id, role, content, citations_json, created_at
                 FROM chat_messages
-                WHERE session_id = %s
+                WHERE session_id = %s::uuid
                 ORDER BY created_at ASC, message_id ASC
                 """,
                 (session_id,),
@@ -69,18 +69,18 @@ class PostgresChatStore(ChatStore):
 
         return [
             {
-                "id": row[0],
+                "id": str(row[0]),
                 "role": row[1],
                 "content": row[2],
-                "citations": json.loads(row[3] or "[]"),
-                "created_at": row[4],
+                "citations": _parse_json_value(row[3]),
+                "created_at": _to_iso(row[4]),
             }
             for row in rows
         ]
 
     def append_message(self, session_id: str, message: dict) -> bool:
         with self._lock, self._conn.cursor() as cursor:
-            cursor.execute("SELECT 1 FROM chat_sessions WHERE session_id = %s", (session_id,))
+            cursor.execute("SELECT 1 FROM chat_sessions WHERE session_id = %s::uuid", (session_id,))
             if cursor.fetchone() is None:
                 return False
 
@@ -89,7 +89,7 @@ class PostgresChatStore(ChatStore):
                 INSERT INTO chat_messages(
                     message_id, session_id, role, content, citations_json, created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s)
+                VALUES (%s::uuid, %s::uuid, %s, %s, %s::jsonb, %s::timestamptz)
                 """,
                 (
                     message["id"],
@@ -102,34 +102,24 @@ class PostgresChatStore(ChatStore):
             )
         return True
 
-    def _ensure_schema(self):
-        with self._lock, self._conn.cursor() as cursor:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS chat_sessions(
-                    session_id TEXT PRIMARY KEY,
-                    created_at TEXT NOT NULL
-                )
-                """
-            )
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS chat_messages(
-                    message_id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    citations_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(session_id) REFERENCES chat_sessions(session_id)
-                )
-                """
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created "
-                "ON chat_messages(session_id, created_at)"
-            )
-
     def close(self):
         with self._lock:
             self._conn.close()
+
+
+def _to_iso(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def _parse_json_value(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, dict)):
+        return value
+    if isinstance(value, str):
+        return json.loads(value or "[]")
+    return value
