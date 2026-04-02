@@ -53,6 +53,9 @@ class _ApiServiceCapturePayload:
         self.last_deleted_document_id = document_id
         return {"status": "success"}
 
+    def count_document_chunks(self, document_id: str):
+        return 11
+
 
 class IngestionServiceTestCase(unittest.TestCase):
     def test_start_indexing_is_idempotent_for_active_job(self):
@@ -154,6 +157,22 @@ class IngestionServiceTestCase(unittest.TestCase):
             self.assertEqual(metadata["chunk_index"], 0)
             self.assertEqual(metadata["token_count"], 4)
             self.assertEqual(metadata["source_uri"], f"{record['document_id']}/doc.txt")
+
+    def test_get_document_index_stats(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage = LocalFileStorageAdapter(temp_dir)
+            documents = DocumentService(storage=storage)
+            record = documents.create_document("doc.txt", "text/plain", b"one two three four")
+            api_service = _ApiServiceCapturePayload()
+            ingestion = IngestionService(document_service=documents, api_service=api_service)
+
+            queued = ingestion.start_indexing(record["document_id"])
+            stats = ingestion.get_document_index_stats(record["document_id"])
+
+            self.assertEqual(stats["document_id"], record["document_id"])
+            self.assertEqual(stats["status"], "uploaded")
+            self.assertEqual(stats["chunks_count"], 11)
+            self.assertEqual(stats["latest_job"]["job_id"], queued["job_id"])
 
 
 if __name__ == "__main__":

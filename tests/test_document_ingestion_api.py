@@ -36,6 +36,16 @@ class _FakeIngestionService:
             items = [item for item in items if item.get("document_id") == document_id]
         return items
 
+    def get_document_index_stats(self, document_id: str):
+        jobs = self.list_jobs(document_id=document_id)
+        latest_job = jobs[0] if jobs else None
+        return {
+            "document_id": document_id,
+            "status": "uploaded",
+            "chunks_count": 3,
+            "latest_job": latest_job,
+        }
+
 
 class DocumentIngestionApiTestCase(unittest.TestCase):
     def setUp(self):
@@ -117,6 +127,26 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         payload = response.json()
         self.assertEqual(payload["error"]["code"], "empty_file")
+
+    @patch("backend.api.routes.get_document_service")
+    @patch("backend.api.routes.get_ingestion_service")
+    def test_document_index_stats_endpoint(self, get_ingestion_service_mock, get_document_service_mock):
+        get_document_service_mock.return_value = self.document_service
+        get_ingestion_service_mock.return_value = self.ingestion_service
+
+        upload_response = self.client.post(
+            "/api/documents/upload",
+            files={"file": ("sample.txt", b"hello world", "text/plain")},
+        )
+        document_id = upload_response.json()["document_id"]
+        self.client.post(f"/api/documents/{document_id}/index")
+
+        response = self.client.get(f"/api/documents/{document_id}/index-stats")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["document_id"], document_id)
+        self.assertEqual(payload["chunks_count"], 3)
+        self.assertEqual(payload["latest_job"]["job_id"], "job-1")
 
 
 if __name__ == "__main__":
