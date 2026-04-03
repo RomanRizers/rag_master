@@ -30,7 +30,11 @@ async function safeCopy(text: string): Promise<boolean> {
   return false;
 }
 
-export function SearchPage() {
+type SearchPageProps = {
+  embedded?: boolean;
+};
+
+export function SearchPage({ embedded = false }: SearchPageProps) {
   const [language, setLanguage] = useState<Language>(getInitialLanguage);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() =>
     parseThemeMode(localStorage.getItem(STORAGE_THEME_KEY))
@@ -142,69 +146,74 @@ export function SearchPage() {
     }
   }
 
+  const content = (
+    <>
+      <SearchToolbar
+        language={language}
+        onSwitchLanguage={switchLanguage}
+        themeMode={themeMode}
+        onThemeModeChange={switchTheme}
+        query={query}
+        onQueryChange={setQuery}
+        topK={topK}
+        onTopKChange={setTopK}
+        onSubmit={submitSearch}
+        loading={mutation.isPending}
+        text={text}
+      />
+
+      <section className="results-zone">
+        <SearchStatus
+          loading={mutation.isPending}
+          isError={mutation.isError}
+          errorMessage={mutation.error instanceof ApiRequestError ? mutation.error.message : text.unexpectedError}
+          isSuccess={mutation.isSuccess}
+          total={mutation.data?.total ?? 0}
+          visible={visibleResults.length}
+          text={text}
+        />
+
+        {mutation.isSuccess && mutation.data.results.length > 0 && (
+          <>
+            <ResultsControls
+              sortMode={sortMode}
+              onSortModeChange={setSortMode}
+              allKeywords={allKeywords}
+              selectedKeywords={selectedKeywords}
+              onToggleKeyword={toggleKeyword}
+              onClearKeywords={() => setSelectedKeywords([])}
+              text={text}
+            />
+
+            <div className="results-grid">
+              {visibleResults.map((result, index) => (
+                <div className="result-animated" key={result.id} style={{ animationDelay: `${index * 55}ms` }}>
+                  <ResultCard
+                    result={result}
+                    query={query}
+                    text={text}
+                    copiedState={copied[result.id] ?? { content: false, keywords: false }}
+                    onCopyContent={() => copyContent(result.id, result.payload.content || "")}
+                    onCopyKeywords={() => copyKeywords(result.id, result.payload.keywords ?? [])}
+                  />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="search-embedded">{content}</div>;
+  }
+
   return (
     <div className="page-shell">
       <div className="ambient ambient-left" />
       <div className="ambient ambient-right" />
-
-      <main className="page">
-        <SearchToolbar
-          language={language}
-          onSwitchLanguage={switchLanguage}
-          themeMode={themeMode}
-          onThemeModeChange={switchTheme}
-          query={query}
-          onQueryChange={setQuery}
-          topK={topK}
-          onTopKChange={setTopK}
-          onSubmit={submitSearch}
-          loading={mutation.isPending}
-          text={text}
-        />
-
-        <section className="results-zone">
-          <SearchStatus
-            loading={mutation.isPending}
-            isError={mutation.isError}
-            errorMessage={
-              mutation.error instanceof ApiRequestError ? mutation.error.message : text.unexpectedError
-            }
-            isSuccess={mutation.isSuccess}
-            total={mutation.data?.total ?? 0}
-            visible={visibleResults.length}
-            text={text}
-          />
-
-          {mutation.isSuccess && mutation.data.results.length > 0 && (
-            <>
-              <ResultsControls
-                sortMode={sortMode}
-                onSortModeChange={setSortMode}
-                allKeywords={allKeywords}
-                selectedKeywords={selectedKeywords}
-                onToggleKeyword={toggleKeyword}
-                onClearKeywords={() => setSelectedKeywords([])}
-                text={text}
-              />
-
-              <div className="results-grid">
-                {visibleResults.map((result, index) => (
-                  <div className="result-animated" key={result.id} style={{ animationDelay: `${index * 55}ms` }}>
-                    <ResultCard
-                      result={result}
-                      query={query}
-                      text={text}
-                      copiedState={copied[result.id] ?? { content: false, keywords: false }}
-                      onCopyContent={() => copyContent(result.id, result.payload.content || "")}
-                      onCopyKeywords={() => copyKeywords(result.id, result.payload.keywords ?? [])}
-                    />
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
-      </main>
+      <main className="page">{content}</main>
     </div>
   );
 }
