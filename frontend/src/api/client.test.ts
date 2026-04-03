@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiRequestError, searchParagraphs } from "./client";
+import { searchParagraphs } from "./client";
 
 describe("api client", () => {
   afterEach(() => {
@@ -34,7 +34,7 @@ describe("api client", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(searchParagraphs({ query: "hello", top_k: 2 })).rejects.toMatchObject<ApiRequestError>({
+    await expect(searchParagraphs({ query: "hello", top_k: 2 })).rejects.toMatchObject({
       code: "storage_error",
       message: "Qdrant unavailable"
     });
@@ -50,7 +50,7 @@ describe("api client", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(searchParagraphs({ query: "hello", top_k: 2 })).rejects.toMatchObject<ApiRequestError>({
+    await expect(searchParagraphs({ query: "hello", top_k: 2 })).rejects.toMatchObject({
       code: "request_error",
       message: "HTTP 503"
     });
