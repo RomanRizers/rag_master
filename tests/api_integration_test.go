@@ -19,6 +19,18 @@ type healthResponse struct {
 	Service string `json:"service"`
 }
 
+type readinessResponse struct {
+	Status string `json:"status"`
+	Checks struct {
+		Qdrant  bool `json:"qdrant"`
+		Storage bool `json:"storage"`
+		LLM     bool `json:"llm"`
+	} `json:"checks"`
+	Meta struct {
+		LLMProvider string `json:"llm_provider"`
+	} `json:"meta"`
+}
+
 type apiErrorEnvelope struct {
 	Error struct {
 		Code    string `json:"code"`
@@ -91,6 +103,28 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 	if payload.Service != "fastapi-backend" {
 		t.Fatalf("unexpected service field: got %q", payload.Service)
+	}
+}
+
+func TestReadinessEndpointReturnsChecksContract(t *testing.T) {
+	response := doRequest(t, http.MethodGet, "/health/ready", nil, "")
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("unexpected status: got %d, want %d or %d", response.StatusCode, http.StatusOK, http.StatusServiceUnavailable)
+	}
+
+	var payload readinessResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode JSON failed: %v", err)
+	}
+
+	if payload.Status != "ok" && payload.Status != "degraded" {
+		t.Fatalf("unexpected readiness status: got %q", payload.Status)
+	}
+
+	if strings.TrimSpace(payload.Meta.LLMProvider) == "" {
+		t.Fatal("expected non-empty meta.llm_provider")
 	}
 }
 
