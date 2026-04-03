@@ -431,6 +431,8 @@
 | done | 2026-04-03 | Frontend API client: документы/jobs/chat + SSE stream parsing | `8e2acc4` |
 | done | 2026-04-03 | Frontend UX: вкладки Search/Documents/Chat + pages для jobs и chat sessions/messages | `26dea11` |
 | done | 2026-04-03 | Frontend styling workspace + test typing fix | `4b040c6` |
+| done | 2026-04-04 | Readiness: проверка `llm` конфигурации (`openrouter/local`) в `/health/ready` | `0187015` |
+| done | 2026-04-04 | Unit-тесты `HealthService` для LLM readiness сценариев | `8fd7925` |
 
 Подтверждение `E5 done`:
 - `uv run python -m unittest tests.test_chat_service tests.test_chat_api -v`
@@ -439,13 +441,15 @@
 - `cd frontend && npm run build`
 - `cd frontend && npm test`
 
+Прогресс `E8` (readiness checks):
+- `uv run python -m unittest tests.test_health_service tests.test_health_api -v`
+
 ## 10.2 Остаточный backlog до v1 done
 
-1. Закрыть `E7`: реализовать полноценный React UX для `Documents` и `Chat` (upload, jobs, session list, citations, error banners), сейчас frontend в основном search-oriented.
-2. Закрыть `E8`: расширить readiness/операционные проверки (включая LLM/provider checks и деградационные сценарии).
-3. Закрыть `E8`: финализировать автоматизацию тестов в едином CI прогоне (Python unit + Go integration + frontend tests).
-4. Закрыть DoD: оформить и зафиксировать runbook эксплуатации (restart, retry ingestion jobs, orphan cleanup, health triage).
-5. Закрыть DoD: добавить стабильный e2e-сценарий `upload -> index done -> chat answer with non-empty citations`.
+1. Закрыть `E8`: расширить readiness/операционные проверки (добавить активный probe доступности LLM endpoint и деградационные сценарии при network timeout).
+2. Закрыть `E8`: финализировать автоматизацию тестов в едином CI прогоне (Python unit + Go integration + frontend tests).
+3. Закрыть DoD: оформить и зафиксировать runbook эксплуатации (restart, retry ingestion jobs, orphan cleanup, health triage).
+4. Закрыть DoD: добавить стабильный e2e-сценарий `upload -> index done -> chat answer with non-empty citations`.
 
 ### Правило ведения трекера
 - После каждого нового коммита:
