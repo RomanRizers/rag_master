@@ -441,6 +441,7 @@
 | done | 2026-04-04 | Unified CI workflow (Python + frontend + Go integration) | `e6556b4` |
 | done | 2026-04-04 | Docs: unified CI workflow + backlog update в master-plan | `a8459fd` |
 | done | 2026-04-04 | Operations runbook (restart/triage/retry/orphan cleanup/smoke tests) | `4a8cb76` |
+| done | 2026-04-04 | Stable e2e service-flow test: `upload -> index -> chat + non-empty citations` | `06d8ca6` |
 
 Подтверждение `E5 done`:
 - `uv run python -m unittest tests.test_chat_service tests.test_chat_api -v`
@@ -462,7 +463,7 @@
 
 ## 10.2 Остаточный backlog до v1 done
 
-1. Закрыть DoD: добавить стабильный e2e-сценарий `upload -> index done -> chat answer with non-empty citations`.
+Открытых пунктов нет.
 
 ### Правило ведения трекера
 - После каждого нового коммита:

@@ -209,6 +209,12 @@ RAG_RUN_SLOW_E2E=1 go test ./tests -v -run TestOptionalIndexAndSearchFlow
 uv run python -m unittest discover -s tests
 ```
 
+Стабильный e2e сценарий (service-level, без внешних зависимостей):
+
+```bash
+uv run python -m unittest tests.test_rag_e2e_flow -v
+```
+
 ## Миграции Postgres
 
 ```bash
