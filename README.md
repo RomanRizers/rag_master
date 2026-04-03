@@ -226,3 +226,13 @@ uv run alembic downgrade -1
 cd frontend
 npm test
 ```
+
+## CI
+
+В репозитории добавлен unified workflow:
+- `.github/workflows/ci.yml`
+
+Он запускает:
+- Python unit tests (`uv run python -m unittest discover -s tests -v`)
+- Frontend tests + build (`npm test`, `npm run build`)
+- Go integration tests (`go test ./tests -v`) с автоподнятием backend на `127.0.0.1:5001`.
