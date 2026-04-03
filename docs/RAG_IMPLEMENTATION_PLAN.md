@@ -342,7 +342,7 @@
 - `E4`: Embedding + Qdrant upsert + job completion — `done`
 - `E5`: Chat sessions/messages API + retrieval pipeline + rerank — `done`
 - `E6`: LLM provider + streaming SSE + citations — `done`
-- `E7`: Frontend documents/chat UX — `todo`
+- `E7`: Frontend documents/chat UX — `done`
 - `E8`: Tests hardening + observability + readiness checks — `in_progress`
 
 ### Выполненные изменения (changelog)
@@ -428,9 +428,16 @@
 | done | 2026-04-03 | Docs: env и поведение rate limiting (`rate_limited`) | `e8057d5` |
 | done | 2026-04-03 | Chat filters в request (`document_names/tags`) + интеграция в retrieval | `2ee0fea` |
 | done | 2026-04-03 | Unit/API тесты chat filters | `1aab60f` |
+| done | 2026-04-03 | Frontend API client: документы/jobs/chat + SSE stream parsing | `8e2acc4` |
+| done | 2026-04-03 | Frontend UX: вкладки Search/Documents/Chat + pages для jobs и chat sessions/messages | `26dea11` |
+| done | 2026-04-03 | Frontend styling workspace + test typing fix | `4b040c6` |
 
 Подтверждение `E5 done`:
 - `uv run python -m unittest tests.test_chat_service tests.test_chat_api -v`
+
+Подтверждение `E7 done`:
+- `cd frontend && npm run build`
+- `cd frontend && npm test`
 
 ## 10.2 Остаточный backlog до v1 done
 
