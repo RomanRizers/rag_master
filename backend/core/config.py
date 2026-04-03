@@ -27,6 +27,8 @@ class Config:
     LOCAL_LLM_API_KEY = os.getenv("LOCAL_LLM_API_KEY", "")
 
     LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "60"))
+    HEALTHCHECK_LLM_ACTIVE_PROBE = os.getenv("HEALTHCHECK_LLM_ACTIVE_PROBE", "0").strip() in {"1", "true", "yes"}
+    HEALTHCHECK_LLM_TIMEOUT_SECONDS = float(os.getenv("HEALTHCHECK_LLM_TIMEOUT_SECONDS", "2.0"))
 
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
     DOCUMENTS_STORAGE_PATH = os.getenv("DOCUMENTS_STORAGE_PATH", "/tmp/rag_documents")

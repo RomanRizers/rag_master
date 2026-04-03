@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from backend.core.config import Config
 from backend.core.exceptions import StorageError
@@ -49,13 +50,19 @@ class HealthService:
     def _check_llm_config(self) -> bool:
         provider = Config.LLM_PROVIDER
         if provider == "openrouter":
-            return (
+            configured = (
                 self._is_http_url(Config.OPENROUTER_BASE_URL)
                 and bool(Config.OPENROUTER_MODEL.strip())
                 and bool(Config.OPENROUTER_API_KEY.strip())
             )
+            if not configured:
+                return False
+            return self._probe_llm_endpoint(Config.OPENROUTER_BASE_URL, Config.OPENROUTER_API_KEY)
         if provider == "local":
-            return self._is_http_url(Config.LOCAL_LLM_BASE_URL) and bool(Config.LOCAL_LLM_MODEL.strip())
+            configured = self._is_http_url(Config.LOCAL_LLM_BASE_URL) and bool(Config.LOCAL_LLM_MODEL.strip())
+            if not configured:
+                return False
+            return self._probe_llm_endpoint(Config.LOCAL_LLM_BASE_URL, Config.LOCAL_LLM_API_KEY)
         return False
 
     @staticmethod
@@ -64,3 +71,21 @@ class HealthService:
             return False
         parsed = urlparse(value.strip())
         return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+    @staticmethod
+    def _probe_llm_endpoint(base_url: str, api_key: str) -> bool:
+        if not Config.HEALTHCHECK_LLM_ACTIVE_PROBE:
+            return True
+
+        headers = {"Accept": "application/json"}
+        if api_key.strip():
+            headers["Authorization"] = f"Bearer {api_key.strip()}"
+
+        endpoint = f"{base_url.rstrip('/')}/models"
+        request = Request(endpoint, method="GET", headers=headers)
+        try:
+            with urlopen(request, timeout=Config.HEALTHCHECK_LLM_TIMEOUT_SECONDS) as response:
+                status = getattr(response, "status", 200)
+            return 200 <= int(status) < 300
+        except Exception:
+            return False
