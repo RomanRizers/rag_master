@@ -48,7 +48,7 @@ Frontend и backend разделены по контейнерам.
 
 - `GET /` -> `{ "status": "ok", "service": "fastapi-backend" }`
 - `GET /health/live` -> live check
-- `GET /health/ready` -> readiness check (`qdrant` + `storage` + `llm` config)
+- `GET /health/ready` -> readiness check (`qdrant` + `storage` + `llm` config, опционально active probe `llm /models`)
 
 ## Локальный запуск backend (без Docker)
 
@@ -91,6 +91,8 @@ LLM_PROVIDER=openrouter
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_API_KEY=...
 OPENROUTER_MODEL=...
+HEALTHCHECK_LLM_ACTIVE_PROBE=0
+HEALTHCHECK_LLM_TIMEOUT_SECONDS=2.0
 CHUNK_SIZE_TOKENS=600
 CHUNK_OVERLAP_TOKENS=120
 RERANK_TOP_N=8
@@ -122,6 +124,13 @@ LLM_PROVIDER=local
 LOCAL_LLM_BASE_URL=http://localhost:11434/v1
 LOCAL_LLM_MODEL=...
 LOCAL_LLM_API_KEY=
+```
+
+Если хотите, чтобы `/health/ready` проверял не только валидность конфигурации, но и сетевую доступность LLM endpoint (`GET {BASE_URL}/models`), включите:
+
+```bash
+HEALTHCHECK_LLM_ACTIVE_PROBE=1
+HEALTHCHECK_LLM_TIMEOUT_SECONDS=2.0
 ```
 
 Для административного cleanup endpoint:
