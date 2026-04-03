@@ -343,7 +343,7 @@
 - `E5`: Chat sessions/messages API + retrieval pipeline + rerank — `done`
 - `E6`: LLM provider + streaming SSE + citations — `done`
 - `E7`: Frontend documents/chat UX — `done`
-- `E8`: Tests hardening + observability + readiness checks — `in_progress`
+- `E8`: Tests hardening + observability + readiness checks — `done`
 
 ### Выполненные изменения (changelog)
 | Status | Date | Task | Commit |
@@ -439,6 +439,8 @@
 | done | 2026-04-04 | Go integration-тест контракта `/health/ready` (`status/checks/meta`) | `021ab96` |
 | done | 2026-04-04 | Go integration: стабилизация content-type тестов без зависимости от векторизации | `e5a34c0` |
 | done | 2026-04-04 | Unified CI workflow (Python + frontend + Go integration) | `e6556b4` |
+| done | 2026-04-04 | Docs: unified CI workflow + backlog update в master-plan | `a8459fd` |
+| done | 2026-04-04 | Operations runbook (restart/triage/retry/orphan cleanup/smoke tests) | `4a8cb76` |
 
 Подтверждение `E5 done`:
 - `uv run python -m unittest tests.test_chat_service tests.test_chat_api -v`
@@ -453,10 +455,14 @@
 Прогресс `E8` (CI automation):
 - `.github/workflows/ci.yml` запускает Python/Frontend/Go тестовые джобы.
 
+Подтверждение `E8 done`:
+- `.github/workflows/ci.yml`
+- `uv run python -m unittest tests.test_health_service tests.test_health_api -v`
+- `go test ./tests -v` (при поднятом backend)
+
 ## 10.2 Остаточный backlog до v1 done
 
-1. Закрыть DoD: оформить и зафиксировать runbook эксплуатации (restart, retry ingestion jobs, orphan cleanup, health triage).
-2. Закрыть DoD: добавить стабильный e2e-сценарий `upload -> index done -> chat answer with non-empty citations`.
+1. Закрыть DoD: добавить стабильный e2e-сценарий `upload -> index done -> chat answer with non-empty citations`.
 
 ### Правило ведения трекера
 - После каждого нового коммита:
