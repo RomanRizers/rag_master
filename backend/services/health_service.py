@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
+from backend.core.config import Config
 from backend.core.exceptions import StorageError
 from backend.infrastructure.qdrant.client import QdrantService
 from backend.infrastructure.storage import StorageAdapter, create_storage_adapter
@@ -17,11 +20,13 @@ class HealthService:
         checks = {
             "qdrant": self._check_qdrant(),
             "storage": self._check_storage(),
+            "llm": self._check_llm_config(),
         }
         ok = all(checks.values())
         payload = {
             "status": "ok" if ok else "degraded",
             "checks": checks,
+            "meta": {"llm_provider": Config.LLM_PROVIDER},
         }
         return payload, ok
 
@@ -40,3 +45,22 @@ class HealthService:
             return True
         except StorageError:
             return False
+
+    def _check_llm_config(self) -> bool:
+        provider = Config.LLM_PROVIDER
+        if provider == "openrouter":
+            return (
+                self._is_http_url(Config.OPENROUTER_BASE_URL)
+                and bool(Config.OPENROUTER_MODEL.strip())
+                and bool(Config.OPENROUTER_API_KEY.strip())
+            )
+        if provider == "local":
+            return self._is_http_url(Config.LOCAL_LLM_BASE_URL) and bool(Config.LOCAL_LLM_MODEL.strip())
+        return False
+
+    @staticmethod
+    def _is_http_url(value: str) -> bool:
+        if not value or not value.strip():
+            return False
+        parsed = urlparse(value.strip())
+        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
