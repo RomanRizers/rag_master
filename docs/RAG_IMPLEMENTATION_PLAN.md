@@ -436,6 +436,7 @@
 | done | 2026-04-04 | Docs: README + tracker update для LLM readiness checks | `8250191` |
 | done | 2026-04-04 | Active readiness probe для LLM endpoint (`/models`) + env toggles | `2b47c62` |
 | done | 2026-04-04 | Unit-тесты активного LLM probe (`ok/fail`) | `4ef8948` |
+| done | 2026-04-04 | Go integration-тест контракта `/health/ready` (`status/checks/meta`) | `021ab96` |
 
 Подтверждение `E5 done`:
 - `uv run python -m unittest tests.test_chat_service tests.test_chat_api -v`
@@ -449,10 +450,9 @@
 
 ## 10.2 Остаточный backlog до v1 done
 
-1. Закрыть `E8`: добавить/усилить интеграционные проверки readiness (Go) с валидацией структуры `checks/meta` для `/health/ready`.
-2. Закрыть `E8`: финализировать автоматизацию тестов в едином CI прогоне (Python unit + Go integration + frontend tests).
-3. Закрыть DoD: оформить и зафиксировать runbook эксплуатации (restart, retry ingestion jobs, orphan cleanup, health triage).
-4. Закрыть DoD: добавить стабильный e2e-сценарий `upload -> index done -> chat answer with non-empty citations`.
+1. Закрыть `E8`: финализировать автоматизацию тестов в едином CI прогоне (Python unit + Go integration + frontend tests).
+2. Закрыть DoD: оформить и зафиксировать runbook эксплуатации (restart, retry ingestion jobs, orphan cleanup, health triage).
+3. Закрыть DoD: добавить стабильный e2e-сценарий `upload -> index done -> chat answer with non-empty citations`.
 
 ### Правило ведения трекера
 - После каждого нового коммита:
