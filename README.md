@@ -7,6 +7,7 @@ FastAPI + Qdrant сервис поиска параграфов по векто�
 Подробная спецификация реализации полноценного Chat RAG:
 
 - [docs/RAG_IMPLEMENTATION_PLAN.md](docs/RAG_IMPLEMENTATION_PLAN.md)
+- [docs/OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md)
 
 ## Архитектура
 
