@@ -211,7 +211,7 @@ func TestSearchValidatesKeywordsType(t *testing.T) {
 
 func TestSearchAcceptsVendorJSONContentType(t *testing.T) {
 	for _, endpoint := range searchEndpoints {
-		response := doRequest(t, http.MethodPost, endpoint, []byte(`{"query":"hello","top_k":1}`), "application/merge-patch+json")
+		response := doRequest(t, http.MethodPost, endpoint, []byte(`{"top_k":1}`), "application/merge-patch+json")
 		if response.StatusCode == http.StatusUnsupportedMediaType {
 			defer response.Body.Close()
 			t.Fatalf("endpoint %s rejected +json media type", endpoint)
@@ -226,7 +226,7 @@ func TestSearchAcceptsJSONWithCharset(t *testing.T) {
 			t,
 			http.MethodPost,
 			endpoint,
-			[]byte(`{"query":"hello","top_k":1}`),
+			[]byte(`{"top_k":1}`),
 			"application/json; charset=utf-8",
 		)
 		if response.StatusCode == http.StatusUnsupportedMediaType {
