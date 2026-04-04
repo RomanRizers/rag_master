@@ -101,7 +101,7 @@ RERANK_SEMANTIC_WEIGHT=0.7
 CHAT_MAX_CONTEXT_CHARS=6000
 CHAT_STORE_BACKEND=memory
 JOB_STORE_BACKEND=memory
-POSTGRES_DSN=postgresql+psycopg://rag:rag@postgres:5432/rag
+POSTGRES_DSN=postgresql://rag:rag@postgres:5432/rag
 MAX_UPLOAD_SIZE_MB=25
 RATE_LIMIT_ENABLED=1
 RATE_LIMIT_UPLOAD_RPM=30
@@ -145,7 +145,7 @@ HEALTHCHECK_LLM_TIMEOUT_SECONDS=2.0
 STORAGE_BACKEND=local
 DOCUMENTS_STORAGE_PATH=/tmp/rag_documents
 DOCUMENT_STORE_BACKEND=memory
-POSTGRES_DSN=postgresql+psycopg://rag:rag@postgres:5432/rag
+POSTGRES_DSN=postgresql://rag:rag@postgres:5432/rag
 ```
 
 Для S3/MinIO:
