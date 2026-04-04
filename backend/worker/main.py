@@ -25,7 +25,7 @@ def main():
 
     poll_interval = float(getattr(Config, "INGESTION_WORKER_POLL_SECONDS", 1.0))
     services = build_services()
-    ingestion = services.ingestion
+    ingestion = services.ingestion_service
 
     logger.info("worker_started", poll_interval_seconds=poll_interval)
 
