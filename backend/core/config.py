@@ -33,7 +33,7 @@ class Config:
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower()
     DOCUMENTS_STORAGE_PATH = os.getenv("DOCUMENTS_STORAGE_PATH", "/tmp/rag_documents")
     DOCUMENT_STORE_BACKEND = os.getenv("DOCUMENT_STORE_BACKEND", "memory").strip().lower()
-    POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql+psycopg://rag:rag@postgres:5432/rag").strip()
+    POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql://rag:rag@postgres:5432/rag").strip()
     INGESTION_WORKER_POLL_SECONDS = float(os.getenv("INGESTION_WORKER_POLL_SECONDS", "1.0"))
     INGESTION_RETRY_BACKOFF_SECONDS = float(os.getenv("INGESTION_RETRY_BACKOFF_SECONDS", "0.5"))
     MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "25"))
