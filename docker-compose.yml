@@ -89,13 +89,15 @@ services:
       - S3_AUTO_CREATE_BUCKET=${S3_AUTO_CREATE_BUCKET:-1}
       - INGESTION_WORKER_POLL_SECONDS=${INGESTION_WORKER_POLL_SECONDS:-1.0}
     depends_on:
+      backend-app:
+        condition: service_started
       qdrant:
         condition: service_started
       minio:
         condition: service_started
       postgres:
         condition: service_healthy
-    command: sh -c "uv run alembic upgrade head && uv run python -m backend.worker.main"
+    command: sh -c "uv run python -m backend.worker.main"
     networks:
       - qdrant-network
 
