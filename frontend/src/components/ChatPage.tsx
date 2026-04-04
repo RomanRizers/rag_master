@@ -127,13 +127,17 @@ export function ChatPage() {
   }
 
   return (
-    <div className="workspace-grid">
-      <section className="panel sessions-panel">
-        <div className="panel-head">
+    <div className="workspace-grid workspace-grid-chat">
+      <aside className="panel sessions-panel chat-sidebar">
+        <div className="panel-head chat-sidebar-head">
           <h2>Chat Sessions</h2>
           <p>Управление диалогами и контекстом.</p>
         </div>
-        <button className="primary-action" type="button" onClick={() => createSessionMutation.mutate()}>
+        <button
+          className="primary-action session-create-button"
+          type="button"
+          onClick={() => createSessionMutation.mutate()}
+        >
           Новая сессия
         </button>
         <div className="session-list">
@@ -144,31 +148,84 @@ export function ChatPage() {
               className={`session-item ${activeSessionId === session.session_id ? "active" : ""}`}
               onClick={() => setActiveSessionId(session.session_id)}
             >
+              <span className="session-kicker">Session</span>
               <strong>{session.session_id.slice(0, 8)}</strong>
               <span>{session.message_count} msg</span>
               <span>{formatIso(session.last_message_at ?? session.created_at)}</span>
             </button>
           ))}
         </div>
-      </section>
+      </aside>
 
-      <section className="panel chat-panel">
-        <div className="panel-head">
+      <section className="panel chat-panel chat-shell">
+        <div className="panel-head chat-shell-head">
           <h2>Chat</h2>
           <p>Ответы модели с цитатами из документов.</p>
         </div>
+        <div className="chat-session-meta">
+          <span className="session-badge">
+            {activeSessionId ? `session ${activeSessionId.slice(0, 8)}` : "сначала создайте сессию"}
+          </span>
+        </div>
 
-        <form className="chat-controls" onSubmit={submitMessage}>
-          <label>
-            <span>Сообщение</span>
-            <textarea
-              rows={3}
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="Сформулируйте вопрос по документам..."
-            />
-          </label>
-          <div className="chat-options">
+        {(sendMutation.isError || messagesQuery.isError || sessionsQuery.isError || createSessionMutation.isError) && (
+          <ErrorBanner
+            error={sendMutation.error ?? messagesQuery.error ?? sessionsQuery.error ?? createSessionMutation.error}
+            copy={appErrorCopy.ru}
+            className="inline-error"
+          />
+        )}
+
+        <div className="messages-list chat-messages-list">
+          {shownMessages.length === 0 && (
+            <div className="chat-empty-state">
+              <p className="muted">Выберите сессию и отправьте первое сообщение.</p>
+            </div>
+          )}
+          {shownMessages.map((item) => (
+            <div className={`message-row ${item.role === "user" ? "user" : "assistant"}`} key={item.id}>
+              <article className={`message-card ${item.role === "user" ? "user" : "assistant"}`}>
+                <header>
+                  <strong>{item.role}</strong>
+                  <span>{formatIso(item.created_at)}</span>
+                </header>
+                <p>{item.content}</p>
+                {item.citations.length > 0 && (
+                  <ul className="citations-list">
+                    {item.citations.map((citation, index) => (
+                      <li key={`${item.id}-citation-${index}`}>
+                        <strong>{citation.document_name ?? "Unknown document"}</strong>
+                        {citation.page ? `, page ${citation.page}` : ""}
+                        {citation.snippet ? ` — ${citation.snippet}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </article>
+            </div>
+          ))}
+        </div>
+
+        <form className="chat-controls chat-composer" onSubmit={submitMessage}>
+          <div className="chat-composer-main">
+            <label className="chat-message-field">
+              <span>Сообщение</span>
+              <textarea
+                rows={4}
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                placeholder="Сформулируйте вопрос по документам..."
+              />
+            </label>
+            <button
+              className="primary-action chat-send-button"
+              type="submit"
+              disabled={sendMutation.isPending || !activeSessionId}
+            >
+              {sendMutation.isPending ? "Отправка..." : "Отправить"}
+            </button>
+          </div>
+          <div className="chat-options chat-options-grid">
             <label>
               <span>top_k</span>
               <input
@@ -197,47 +254,12 @@ export function ChatPage() {
                 onChange={(event) => setTagsText(event.target.value)}
               />
             </label>
-            <label className="toggle-line">
+            <label className="toggle-line toggle-line-card">
               <input type="checkbox" checked={streaming} onChange={(event) => setStreaming(event.target.checked)} />
               <span>Streaming SSE</span>
             </label>
-            <button className="primary-action" type="submit" disabled={sendMutation.isPending || !activeSessionId}>
-              {sendMutation.isPending ? "Отправка..." : "Отправить"}
-            </button>
           </div>
         </form>
-
-        {(sendMutation.isError || messagesQuery.isError || sessionsQuery.isError || createSessionMutation.isError) && (
-          <ErrorBanner
-            error={sendMutation.error ?? messagesQuery.error ?? sessionsQuery.error ?? createSessionMutation.error}
-            copy={appErrorCopy.ru}
-            className="inline-error"
-          />
-        )}
-
-        <div className="messages-list">
-          {shownMessages.length === 0 && <p className="muted">Выберите сессию и отправьте первое сообщение.</p>}
-          {shownMessages.map((item) => (
-            <article className={`message-card ${item.role === "user" ? "user" : "assistant"}`} key={item.id}>
-              <header>
-                <strong>{item.role}</strong>
-                <span>{formatIso(item.created_at)}</span>
-              </header>
-              <p>{item.content}</p>
-              {item.citations.length > 0 && (
-                <ul className="citations-list">
-                  {item.citations.map((citation, index) => (
-                    <li key={`${item.id}-citation-${index}`}>
-                      <strong>{citation.document_name ?? "Unknown document"}</strong>
-                      {citation.page ? `, page ${citation.page}` : ""}
-                      {citation.snippet ? ` — ${citation.snippet}` : ""}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </article>
-          ))}
-        </div>
       </section>
     </div>
   );
