@@ -36,7 +36,7 @@ services:
       - hf-cache:/root/.cache/huggingface
       - documents-storage:/tmp/rag_documents
     environment:
-      - POSTGRES_DSN=${POSTGRES_DSN:-postgresql://rag:rag@postgres:5432/rag}
+      - POSTGRES_DSN=${POSTGRES_DSN:-postgresql+psycopg://rag:rag@postgres:5432/rag}
       - CHAT_STORE_BACKEND=${CHAT_STORE_BACKEND:-postgres}
       - JOB_STORE_BACKEND=${JOB_STORE_BACKEND:-postgres}
       - DOCUMENT_STORE_BACKEND=${DOCUMENT_STORE_BACKEND:-postgres}
@@ -72,7 +72,7 @@ services:
       - hf-cache:/root/.cache/huggingface
       - documents-storage:/tmp/rag_documents
     environment:
-      - POSTGRES_DSN=${POSTGRES_DSN:-postgresql://rag:rag@postgres:5432/rag}
+      - POSTGRES_DSN=${POSTGRES_DSN:-postgresql+psycopg://rag:rag@postgres:5432/rag}
       - CHAT_STORE_BACKEND=${CHAT_STORE_BACKEND:-postgres}
       - JOB_STORE_BACKEND=${JOB_STORE_BACKEND:-postgres}
       - DOCUMENT_STORE_BACKEND=${DOCUMENT_STORE_BACKEND:-postgres}

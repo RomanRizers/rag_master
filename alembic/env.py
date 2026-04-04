@@ -6,6 +6,8 @@ import os
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from backend.infrastructure.postgres_dsn import normalize_sqlalchemy_postgres_dsn
+
 config = context.config
 
 if config.config_file_name is not None:
@@ -16,7 +18,8 @@ target_metadata = None
 
 
 def _get_database_url() -> str:
-    return os.getenv("POSTGRES_DSN") or os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+    raw = os.getenv("POSTGRES_DSN") or os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+    return normalize_sqlalchemy_postgres_dsn(raw)
 
 
 def run_migrations_offline() -> None:
