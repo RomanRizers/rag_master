@@ -18,3 +18,4 @@ vector_e5-base-en-ru.json
 frontend/*.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+qdrant_collections/
