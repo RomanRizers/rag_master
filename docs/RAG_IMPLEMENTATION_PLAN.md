@@ -442,6 +442,8 @@
 | done | 2026-04-04 | Docs: unified CI workflow + backlog update в master-plan | `a8459fd` |
 | done | 2026-04-04 | Operations runbook (restart/triage/retry/orphan cleanup/smoke tests) | `4a8cb76` |
 | done | 2026-04-04 | Stable e2e service-flow test: `upload -> index -> chat + non-empty citations` | `06d8ca6` |
+| done | 2026-04-04 | Frontend component tests for documents/jobs/chat/citations | `a140fbf` |
+| done | 2026-04-04 | Frontend user-facing error banners for `llm_unavailable/retrieval_failed/parsing_failed` | `a140fbf` |
 
 Подтверждение `E5 done`:
 - `uv run python -m unittest tests.test_chat_service tests.test_chat_api -v`
