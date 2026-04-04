@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { ApiRequestError, searchParagraphs } from "../api/client";
 import { STORAGE_LANG_KEY, copy, type Language } from "../i18n";
 import { getSystemPrefersDark, parseThemeMode, resolveTheme, STORAGE_THEME_KEY, type ThemeMode } from "../theme";
+import { appErrorCopy } from "../utils/appError";
 import { extractKeywords, filterByKeywords, sortResults, type SortMode } from "../utils/search";
 import { ResultCard } from "./ResultCard";
 import { ResultsControls } from "./ResultsControls";
@@ -166,11 +167,12 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
         <SearchStatus
           loading={mutation.isPending}
           isError={mutation.isError}
-          errorMessage={mutation.error instanceof ApiRequestError ? mutation.error.message : text.unexpectedError}
+          error={mutation.error instanceof ApiRequestError ? mutation.error : new Error(text.unexpectedError)}
           isSuccess={mutation.isSuccess}
           total={mutation.data?.total ?? 0}
           visible={visibleResults.length}
           text={text}
+          errorCopy={appErrorCopy[language]}
         />
 
         {mutation.isSuccess && mutation.data.results.length > 0 && (

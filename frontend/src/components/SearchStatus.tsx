@@ -1,28 +1,32 @@
+import type { AppErrorCopy } from "../utils/appError";
+import { ErrorBanner } from "./ErrorBanner";
+
 type SearchStatusCopy = {
   loading: string;
   empty: string;
-  errorPrefix: string;
   found: string;
 };
 
 type SearchStatusProps = {
   loading: boolean;
   isError: boolean;
-  errorMessage: string;
+  error: unknown;
   isSuccess: boolean;
   total: number;
   visible: number;
   text: SearchStatusCopy;
+  errorCopy: AppErrorCopy;
 };
 
 export function SearchStatus({
   loading,
   isError,
-  errorMessage,
+  error,
   isSuccess,
   total,
   visible,
-  text
+  text,
+  errorCopy
 }: SearchStatusProps) {
   if (loading) {
     return (
@@ -35,11 +39,7 @@ export function SearchStatus({
   }
 
   if (isError) {
-    return (
-      <p className="status status-error" role="alert">
-        {text.errorPrefix}: {errorMessage}
-      </p>
-    );
+    return <ErrorBanner error={error} copy={errorCopy} className="status status-error" />;
   }
 
   if (isSuccess && total === 0) {

@@ -10,6 +10,8 @@ import {
   streamChatMessage
 } from "../api/client";
 import type { ChatCitation, ChatMessage } from "../types";
+import { appErrorCopy } from "../utils/appError";
+import { ErrorBanner } from "./ErrorBanner";
 
 function formatIso(value?: string | null): string {
   if (!value) {
@@ -124,16 +126,6 @@ export function ChatPage() {
     sendMutation.mutate();
   }
 
-  function errorText(value: unknown): string {
-    if (value instanceof ApiRequestError) {
-      return `${value.code}: ${value.message}`;
-    }
-    if (value instanceof Error) {
-      return value.message;
-    }
-    return "Unexpected error";
-  }
-
   return (
     <div className="workspace-grid">
       <section className="panel sessions-panel">
@@ -216,9 +208,11 @@ export function ChatPage() {
         </form>
 
         {(sendMutation.isError || messagesQuery.isError || sessionsQuery.isError || createSessionMutation.isError) && (
-          <p className="inline-error" role="alert">
-            {errorText(sendMutation.error ?? messagesQuery.error ?? sessionsQuery.error ?? createSessionMutation.error)}
-          </p>
+          <ErrorBanner
+            error={sendMutation.error ?? messagesQuery.error ?? sessionsQuery.error ?? createSessionMutation.error}
+            copy={appErrorCopy.ru}
+            className="inline-error"
+          />
         )}
 
         <div className="messages-list">

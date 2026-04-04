@@ -1,8 +1,10 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ApiRequestError, getDocumentIndexStats, indexDocument, listDocuments, listJobs, uploadDocument } from "../api/client";
+import { getDocumentIndexStats, indexDocument, listDocuments, listJobs, uploadDocument } from "../api/client";
 import type { DocumentItem, JobItem } from "../types";
+import { appErrorCopy } from "../utils/appError";
+import { ErrorBanner } from "./ErrorBanner";
 
 type StatsByDocument = Record<string, { chunks_count: number; latest_job_status?: string | null }>;
 
@@ -116,16 +118,6 @@ export function DocumentsPage() {
     });
   }
 
-  function getErrorMessage(value: unknown): string {
-    if (value instanceof ApiRequestError) {
-      return `${value.code}: ${value.message}`;
-    }
-    if (value instanceof Error) {
-      return value.message;
-    }
-    return "Unexpected error";
-  }
-
   return (
     <div className="workspace-grid">
       <section className="panel">
@@ -170,11 +162,11 @@ export function DocumentsPage() {
         </form>
 
         {(uploadMutation.isError || documentsQuery.isError || indexMutation.isError || statsMutation.isError) && (
-          <p className="inline-error" role="alert">
-            {getErrorMessage(
-              uploadMutation.error ?? documentsQuery.error ?? indexMutation.error ?? statsMutation.error
-            )}
-          </p>
+          <ErrorBanner
+            error={uploadMutation.error ?? documentsQuery.error ?? indexMutation.error ?? statsMutation.error}
+            copy={appErrorCopy.ru}
+            className="inline-error"
+          />
         )}
 
         <div className="table-wrap">
