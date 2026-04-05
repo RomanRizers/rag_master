@@ -67,6 +67,8 @@ export function DocumentsPage() {
 
   const [file, setFile] = useState<File | null>(null);
   const [newKnowledgeBaseName, setNewKnowledgeBaseName] = useState("");
+  const [datasetPage, setDatasetPage] = useState(1);
+  const [datasetPageSize, setDatasetPageSize] = useState(8);
   const [sourceName, setSourceName] = useState("");
   const [tagsText, setTagsText] = useState("");
   const [knowledgeBase, setKnowledgeBase] = useState("default");
@@ -186,6 +188,10 @@ export function DocumentsPage() {
     }));
   }, [documentsByKnowledgeBase, knowledgeBasesQuery.data?.knowledge_bases]);
 
+  useEffect(() => {
+    setDatasetPage(1);
+  }, [datasetPageSize]);
+
   const activeKnowledgeBase = useMemo(() => {
     const routeValue = params.datasetName ? decodeURIComponent(params.datasetName) : "";
     if (!routeValue) {
@@ -217,6 +223,12 @@ export function DocumentsPage() {
   );
 
   const selectedDatasetInfo = knowledgeBases.find((item) => item.name === activeKnowledgeBase);
+  const totalDatasetPages = Math.max(1, Math.ceil(knowledgeBases.length / datasetPageSize));
+  const currentDatasetPage = Math.min(datasetPage, totalDatasetPages);
+  const visibleKnowledgeBases = knowledgeBases.slice(
+    (currentDatasetPage - 1) * datasetPageSize,
+    currentDatasetPage * datasetPageSize
+  );
 
   function submitUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -280,6 +292,18 @@ export function DocumentsPage() {
             <div className="dataset-board-actions">
               <span className="chip">{knowledgeBases.length} баз</span>
               <span className="chip">{documents.length} документов</span>
+              <label className="dataset-page-size">
+                <span>Показывать</span>
+                <select
+                  value={datasetPageSize}
+                  onChange={(event) => setDatasetPageSize(Number(event.target.value))}
+                >
+                  <option value={6}>6</option>
+                  <option value={8}>8</option>
+                  <option value={12}>12</option>
+                  <option value={16}>16</option>
+                </select>
+              </label>
               <form className="dataset-create-form" onSubmit={submitKnowledgeBaseCreate}>
                 <input
                   type="text"
@@ -299,11 +323,12 @@ export function DocumentsPage() {
           </div>
 
           <div className="dataset-grid">
-            {knowledgeBases.map((item) => {
+            {visibleKnowledgeBases.map((item) => {
               const kbDocuments = documentsByKnowledgeBase.get(item.name) ?? [];
               const newestDocument = kbDocuments
                 .slice()
                 .sort((left, right) => (left.created_at < right.created_at ? 1 : -1))[0];
+              const indexedCount = kbDocuments.filter((document) => document.status === "indexed").length;
 
               return (
                 <button
@@ -317,14 +342,46 @@ export function DocumentsPage() {
                 >
                   <div className="dataset-tile-badge">{makeDatasetBadge(item.name)}</div>
                   <div className="dataset-tile-copy">
-                    <strong>{item.name}</strong>
-                    <span>{item.document_count} files</span>
+                    <div className="dataset-tile-topline">
+                      <strong>{item.name}</strong>
+                      <span className="dataset-tile-count">{item.document_count} files</span>
+                    </div>
+                    <div className="dataset-tile-metrics">
+                      <span className="dataset-pill">{indexedCount} indexed</span>
+                      <span className="dataset-pill">{item.document_count - indexedCount} pending</span>
+                    </div>
                     <span>{newestDocument ? formatIso(newestDocument.created_at) : "empty dataset"}</span>
                   </div>
                 </button>
               );
             })}
           </div>
+
+          {knowledgeBases.length > datasetPageSize && (
+            <div className="dataset-pagination">
+              <span className="muted">
+                Page {currentDatasetPage} / {totalDatasetPages}
+              </span>
+              <div className="dataset-pagination-actions">
+                <button
+                  type="button"
+                  className="secondary-action"
+                  disabled={currentDatasetPage <= 1}
+                  onClick={() => setDatasetPage((current) => Math.max(1, current - 1))}
+                >
+                  Назад
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  disabled={currentDatasetPage >= totalDatasetPages}
+                  onClick={() => setDatasetPage((current) => Math.min(totalDatasetPages, current + 1))}
+                >
+                  Далее
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
