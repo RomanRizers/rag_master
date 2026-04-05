@@ -157,34 +157,25 @@ export function ChatPage() {
     );
   }
 
+  const sessions = sessionsQuery.data?.sessions ?? [];
+  const knowledgeBases = knowledgeBasesQuery.data?.knowledge_bases ?? [];
+
   return (
-    <div className="workspace-grid workspace-grid-chat chat-workspace">
-      <aside className="panel sessions-panel chat-sidebar">
-        <div className="chat-sidebar-top">
-          <div className="panel-head chat-sidebar-head">
-            <h2>Chat Sessions</h2>
-            <p>Диалоги, пресеты и быстрый контекст.</p>
+    <div className="chat-layout">
+      <aside className="panel chat-sidebar">
+        <div className="panel-head">
+          <div>
+            <span className="section-kicker">Chat</span>
+            <h2>Sessions</h2>
+            <p>Левая колонка только для выбора диалога и базовых действий.</p>
           </div>
-          <button
-            className="primary-action session-create-button"
-            type="button"
-            onClick={() => createSessionMutation.mutate()}
-          >
+          <button className="primary-action" type="button" onClick={() => createSessionMutation.mutate()}>
             Новая сессия
           </button>
         </div>
-        <div className="chat-sidebar-stats">
-          <article className="chat-stat-card">
-            <span>Сессий</span>
-            <strong>{sessionsQuery.data?.sessions?.length ?? 0}</strong>
-          </article>
-          <article className="chat-stat-card">
-            <span>Баз знаний</span>
-            <strong>{knowledgeBasesQuery.data?.knowledge_bases?.length ?? 0}</strong>
-          </article>
-        </div>
+
         <div className="session-list">
-          {(sessionsQuery.data?.sessions ?? []).map((session) => (
+          {sessions.map((session) => (
             <div
               key={session.session_id}
               className={`session-item ${activeSessionId === session.session_id ? "active" : ""}`}
@@ -209,26 +200,14 @@ export function ChatPage() {
         </div>
       </aside>
 
-      <section className="panel chat-panel chat-shell">
-        <div className="chat-shell-hero">
-          <div className="panel-head chat-shell-head">
-            <h2>Chat</h2>
-            <p>Полноценная рабочая лента с выбором источников и быстрым ответом.</p>
-          </div>
-          <div className="chat-session-meta">
-            <span className="session-badge">
-              {activeSessionId ? `session ${activeSessionId.slice(0, 8)}` : "сначала создайте сессию"}
-            </span>
-            {activeSessionId && (
-              <button
-                type="button"
-                className="danger-action"
-                disabled={sendMutation.isPending || deleteSessionMutation.isPending}
-                onClick={() => deleteSessionMutation.mutate(activeSessionId)}
-              >
-                Удалить чат
-              </button>
-            )}
+      <section className="panel chat-shell">
+        <div className="chat-header">
+          <div className="panel-head">
+            <div>
+              <span className="section-kicker">Conversation</span>
+              <h2>{activeSessionId ? `Session ${activeSessionId.slice(0, 8)}` : "Chat"}</h2>
+              <p>Полноценная рабочая лента без тяжёлых dashboard-блоков.</p>
+            </div>
           </div>
           <div className="chat-active-filters">
             <span className="chip chip-primary">top_k {topK}</span>
@@ -291,84 +270,93 @@ export function ChatPage() {
           ))}
         </div>
 
-        <form className="chat-controls chat-composer" onSubmit={submitMessage}>
-          <div className="chat-composer-main chat-composer-grid">
-            <div className="chat-composer-column">
-              <label className="chat-message-field">
-                <span>Сообщение</span>
-                <textarea
-                  rows={4}
-                  value={message}
-                  onChange={(event) => setMessage(event.target.value)}
-                  placeholder="Сформулируйте вопрос по документам..."
-                />
-              </label>
-              <div className="knowledge-base-filter chat-knowledge-filter">
-                <div className="filter-headline">
-                  <span>Базы знаний</span>
-                  {selectedKnowledgeBases.length > 0 && (
-                    <button type="button" className="text-button" onClick={() => setSelectedKnowledgeBases([])}>
-                      Сбросить
-                    </button>
-                  )}
-                </div>
-                <div className="keyword-chips">
-                  {(knowledgeBasesQuery.data?.knowledge_bases ?? []).map((item) => (
-                    <button
-                      key={item.name}
-                      type="button"
-                      className={`keyword-chip ${selectedKnowledgeBases.includes(item.name) ? "active" : ""}`}
-                      onClick={() => toggleKnowledgeBase(item.name)}
-                    >
-                      {item.name} ({item.document_count})
-                    </button>
-                  ))}
-                </div>
-              </div>
+        <form className="chat-composer" onSubmit={submitMessage}>
+          <label className="chat-message-field">
+            <span>Сообщение</span>
+            <textarea
+              rows={4}
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              placeholder="Сформулируйте вопрос по документам..."
+            />
+          </label>
+
+          <div className="chat-composer-sidebar">
+            <label>
+              <span>top_k</span>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={topK}
+                onChange={(event) => setTopK(Number(event.target.value) || 5)}
+              />
+            </label>
+            <label>
+              <span>Фильтр по document_name</span>
+              <input
+                type="text"
+                value={docNamesText}
+                placeholder="doc1.pdf, doc2.docx"
+                onChange={(event) => setDocNamesText(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Фильтр по tags</span>
+              <input
+                type="text"
+                value={tagsText}
+                placeholder="finance, hr"
+                onChange={(event) => setTagsText(event.target.value)}
+              />
+            </label>
+            <label className="toggle-line">
+              <input type="checkbox" checked={streaming} onChange={(event) => setStreaming(event.target.checked)} />
+              <span>Streaming SSE</span>
+            </label>
+          </div>
+
+          <div className="chat-kb-row">
+            <div className="filter-headline">
+              <span>Базы знаний</span>
+              {selectedKnowledgeBases.length > 0 && (
+                <button type="button" className="text-button" onClick={() => setSelectedKnowledgeBases([])}>
+                  Сбросить
+                </button>
+              )}
             </div>
-            <div className="chat-composer-side">
-              <div className="chat-options chat-options-grid chat-options-tall">
-                <label>
-                  <span>top_k</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={topK}
-                    onChange={(event) => setTopK(Number(event.target.value) || 5)}
-                  />
-                </label>
-                <label>
-                  <span>Фильтр по document_name</span>
-                  <input
-                    type="text"
-                    value={docNamesText}
-                    placeholder="doc1.pdf, doc2.docx"
-                    onChange={(event) => setDocNamesText(event.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Фильтр по tags</span>
-                  <input
-                    type="text"
-                    value={tagsText}
-                    placeholder="finance, hr"
-                    onChange={(event) => setTagsText(event.target.value)}
-                  />
-                </label>
-                <label className="toggle-line toggle-line-card">
-                  <input type="checkbox" checked={streaming} onChange={(event) => setStreaming(event.target.checked)} />
-                  <span>Streaming SSE</span>
-                </label>
-              </div>
+            <div className="keyword-chips">
+              {knowledgeBases.map((item) => (
+                <button
+                  key={item.name}
+                  type="button"
+                  className={`keyword-chip ${selectedKnowledgeBases.includes(item.name) ? "active" : ""}`}
+                  onClick={() => toggleKnowledgeBase(item.name)}
+                >
+                  {item.name} ({item.document_count})
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="chat-composer-actions">
+            <button
+              className="primary-action"
+              type="submit"
+              disabled={sendMutation.isPending || !activeSessionId}
+            >
+              {sendMutation.isPending ? "Отправка..." : "Отправить"}
+            </button>
+            {activeSessionId && (
               <button
-                className="primary-action chat-send-button chat-send-button-strong"
-                type="submit"
-                disabled={sendMutation.isPending || !activeSessionId}
+                type="button"
+                className="danger-action"
+                disabled={sendMutation.isPending || deleteSessionMutation.isPending}
+                onClick={() => deleteSessionMutation.mutate(activeSessionId)}
               >
-                {sendMutation.isPending ? "Отправка..." : "Отправить"}
+                Удалить чат
               </button>
-            </div>
+            )}
           </div>
         </form>
       </section>

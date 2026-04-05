@@ -163,8 +163,10 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
     }
   }
 
+  const knowledgeBases = knowledgeBasesQuery.data?.knowledge_bases ?? [];
+
   const content = (
-    <>
+    <div className="page-section">
       <SearchToolbar
         language={language}
         onSwitchLanguage={switchLanguage}
@@ -179,9 +181,12 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
         text={text}
       />
 
-      <section className="results-controls knowledge-base-filter">
-        <div className="filter-headline">
-          <span>{text.knowledgeBase}</span>
+      <section className="toolbar-card">
+        <div className="toolbar-inline">
+          <div className="toolbar-copy compact">
+            <span className="section-kicker">{text.knowledgeBase}</span>
+            <h2>Scope</h2>
+          </div>
           {selectedKnowledgeBases.length > 0 && (
             <button type="button" className="text-button" onClick={() => setSelectedKnowledgeBases([])}>
               {text.clearFilters}
@@ -189,7 +194,7 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
           )}
         </div>
         <div className="keyword-chips">
-          {(knowledgeBasesQuery.data?.knowledge_bases ?? []).map((item) => (
+          {knowledgeBases.map((item) => (
             <button
               key={item.name}
               type="button"
@@ -202,48 +207,45 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
         </div>
       </section>
 
-      <section className="results-zone">
-        <SearchStatus
-          loading={mutation.isPending}
-          isError={mutation.isError}
-          error={mutation.error instanceof ApiRequestError ? mutation.error : new Error(text.unexpectedError)}
-          isSuccess={mutation.isSuccess}
-          total={mutation.data?.total ?? 0}
-          visible={visibleResults.length}
-          text={text}
-          errorCopy={appErrorCopy[language]}
-        />
+      <SearchStatus
+        loading={mutation.isPending}
+        isError={mutation.isError}
+        error={mutation.error instanceof ApiRequestError ? mutation.error : new Error(text.unexpectedError)}
+        isSuccess={mutation.isSuccess}
+        total={mutation.data?.total ?? 0}
+        visible={visibleResults.length}
+        text={text}
+        errorCopy={appErrorCopy[language]}
+      />
 
-        {mutation.isSuccess && mutation.data.results.length > 0 && (
-          <>
-            <ResultsControls
-              sortMode={sortMode}
-              onSortModeChange={setSortMode}
-              allKeywords={allKeywords}
-              selectedKeywords={selectedKeywords}
-              onToggleKeyword={toggleKeyword}
-              onClearKeywords={() => setSelectedKeywords([])}
-              text={text}
-            />
+      {mutation.isSuccess && mutation.data.results.length > 0 && (
+        <>
+          <ResultsControls
+            sortMode={sortMode}
+            onSortModeChange={setSortMode}
+            allKeywords={allKeywords}
+            selectedKeywords={selectedKeywords}
+            onToggleKeyword={toggleKeyword}
+            onClearKeywords={() => setSelectedKeywords([])}
+            text={text}
+          />
 
-            <div className="results-grid">
-              {visibleResults.map((result, index) => (
-                <div className="result-animated" key={result.id} style={{ animationDelay: `${index * 55}ms` }}>
-                  <ResultCard
-                    result={result}
-                    query={query}
-                    text={text}
-                    copiedState={copied[result.id] ?? { content: false, keywords: false }}
-                    onCopyContent={() => copyContent(result.id, result.payload.content || "")}
-                    onCopyKeywords={() => copyKeywords(result.id, result.payload.keywords ?? [])}
-                  />
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </section>
-    </>
+          <section className="results-grid">
+            {visibleResults.map((result) => (
+              <ResultCard
+                key={result.id}
+                result={result}
+                query={query}
+                text={text}
+                copiedState={copied[result.id] ?? { content: false, keywords: false }}
+                onCopyContent={() => copyContent(result.id, result.payload.content || "")}
+                onCopyKeywords={() => copyKeywords(result.id, result.payload.keywords ?? [])}
+              />
+            ))}
+          </section>
+        </>
+      )}
+    </div>
   );
 
   if (embedded) {
@@ -252,8 +254,6 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
 
   return (
     <div className="page-shell">
-      <div className="ambient ambient-left" />
-      <div className="ambient ambient-right" />
       <main className="page">{content}</main>
     </div>
   );

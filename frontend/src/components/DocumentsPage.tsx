@@ -1,7 +1,9 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
+  createKnowledgeBase,
   deleteDocument,
   getDocumentIndexStats,
   indexDocument,
@@ -41,10 +43,30 @@ function formatIso(value?: string | null): string {
   return date.toLocaleString();
 }
 
+function makeDatasetBadge(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return "KB";
+  }
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
 export function DocumentsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const params = useParams<{ datasetName?: string }>();
 
   const [file, setFile] = useState<File | null>(null);
+  const [newKnowledgeBaseName, setNewKnowledgeBaseName] = useState("");
   const [sourceName, setSourceName] = useState("");
   const [tagsText, setTagsText] = useState("");
   const [knowledgeBase, setKnowledgeBase] = useState("default");
@@ -71,14 +93,25 @@ export function DocumentsPage() {
   const uploadMutation = useMutation({
     mutationFn: (payload: { file: File; sourceName: string; tags: string[]; knowledgeBase: string }) =>
       uploadDocument(payload.file, payload.sourceName, payload.tags, payload.knowledgeBase),
-    onSuccess: () => {
+    onSuccess: (_, payload) => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
       setFile(null);
       setSourceName("");
       setTagsText("");
-      setKnowledgeBase("default");
+      setKnowledgeBase(payload.knowledgeBase);
+      navigate(`/dataset/${encodeURIComponent(payload.knowledgeBase)}`);
+    }
+  });
+
+  const createKnowledgeBaseMutation = useMutation({
+    mutationFn: createKnowledgeBase,
+    onSuccess: (payload) => {
+      queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+      setNewKnowledgeBaseName("");
+      setKnowledgeBase(payload.name);
+      navigate(`/dataset/${encodeURIComponent(payload.name)}`);
     }
   });
 
@@ -130,15 +163,60 @@ export function DocumentsPage() {
     return grouped;
   }, [jobs]);
 
-  const recentJobs = useMemo(() => jobs.slice(0, 10), [jobs]);
+  const documentsByKnowledgeBase = useMemo(() => {
+    const grouped = new Map<string, DocumentItem[]>();
+    for (const document of documents) {
+      const key = document.knowledge_base || "default";
+      const existing = grouped.get(key) ?? [];
+      existing.push(document);
+      grouped.set(key, existing);
+    }
+    return grouped;
+  }, [documents]);
+
+  const knowledgeBases = useMemo(() => {
+    const apiItems = knowledgeBasesQuery.data?.knowledge_bases ?? [];
+    if (apiItems.length > 0) {
+      return apiItems;
+    }
+
+    return Array.from(documentsByKnowledgeBase.entries()).map(([name, items]) => ({
+      name,
+      document_count: items.length
+    }));
+  }, [documentsByKnowledgeBase, knowledgeBasesQuery.data?.knowledge_bases]);
+
+  const activeKnowledgeBase = useMemo(() => {
+    const routeValue = params.datasetName ? decodeURIComponent(params.datasetName) : "";
+    if (!routeValue) {
+      return "";
+    }
+
+    const exists = knowledgeBases.some((item) => item.name === routeValue);
+    return exists ? routeValue : "";
+  }, [knowledgeBases, params.datasetName]);
+
+  useEffect(() => {
+    if (activeKnowledgeBase) {
+      setKnowledgeBase(activeKnowledgeBase);
+    }
+  }, [activeKnowledgeBase]);
+
+  const selectedDocuments = activeKnowledgeBase
+    ? documentsByKnowledgeBase.get(activeKnowledgeBase) ?? []
+    : documents;
+
+  const selectedJobs = useMemo(() => {
+    const ids = new Set(selectedDocuments.map((document) => document.document_id));
+    return jobs.filter((job) => ids.has(job.document_id)).slice(0, 8);
+  }, [jobs, selectedDocuments]);
+
   const indexedDocumentsCount = useMemo(
-    () => documents.filter((item) => item.status === "indexed").length,
-    [documents]
+    () => selectedDocuments.filter((item) => item.status === "indexed").length,
+    [selectedDocuments]
   );
-  const activeJobsCount = useMemo(
-    () => jobs.filter((item) => item.status === "queued" || item.status === "running").length,
-    [jobs]
-  );
+
+  const selectedDatasetInfo = knowledgeBases.find((item) => item.name === activeKnowledgeBase);
 
   function submitUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -154,227 +232,283 @@ export function DocumentsPage() {
       file,
       sourceName,
       tags,
-      knowledgeBase
+      knowledgeBase: activeKnowledgeBase || knowledgeBase
     });
   }
 
-  const knowledgeBases = knowledgeBasesQuery.data?.knowledge_bases ?? [];
+  function submitKnowledgeBaseCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = newKnowledgeBaseName.trim();
+    if (!trimmed) {
+      return;
+    }
+    createKnowledgeBaseMutation.mutate(trimmed);
+  }
 
   return (
-    <div className="documents-workspace">
-      <section className="documents-main">
-        <section className="documents-hero panel">
-          <div className="documents-hero-copy">
+    <div className="page-section">
+      {(uploadMutation.isError ||
+        createKnowledgeBaseMutation.isError ||
+        documentsQuery.isError ||
+        indexMutation.isError ||
+        statsMutation.isError ||
+        deleteMutation.isError) && (
+        <ErrorBanner
+          error={
+            uploadMutation.error ??
+            createKnowledgeBaseMutation.error ??
+            documentsQuery.error ??
+            indexMutation.error ??
+            statsMutation.error ??
+            deleteMutation.error
+          }
+          copy={appErrorCopy.ru}
+          className="inline-error"
+        />
+      )}
+
+      {!activeKnowledgeBase && (
+        <section className="dataset-board panel">
+          <div className="dataset-board-head">
             <div className="panel-head">
-              <h2>Documents</h2>
-              <p>Загрузка, распределение по базам знаний и контроль индексации.</p>
+              <div>
+                <span className="section-kicker">Dataset</span>
+                <h2>Knowledge Bases</h2>
+                <p>Сначала выбери базу знаний, затем работай с документами внутри неё.</p>
+              </div>
             </div>
-            <div className="documents-kpi-grid">
-              <article className="documents-kpi-card">
-                <span>Всего документов</span>
-                <strong>{documents.length}</strong>
-              </article>
-              <article className="documents-kpi-card">
-                <span>Индексировано</span>
-                <strong>{indexedDocumentsCount}</strong>
-              </article>
-              <article className="documents-kpi-card">
-                <span>Активные jobs</span>
-                <strong>{activeJobsCount}</strong>
-              </article>
-              <article className="documents-kpi-card">
-                <span>Баз знаний</span>
-                <strong>{knowledgeBases.length}</strong>
-              </article>
+            <div className="dataset-board-actions">
+              <span className="chip">{knowledgeBases.length} баз</span>
+              <span className="chip">{documents.length} документов</span>
+              <form className="dataset-create-form" onSubmit={submitKnowledgeBaseCreate}>
+                <input
+                  type="text"
+                  value={newKnowledgeBaseName}
+                  placeholder="Новая база знаний"
+                  onChange={(event) => setNewKnowledgeBaseName(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="primary-action"
+                  disabled={createKnowledgeBaseMutation.isPending || !newKnowledgeBaseName.trim()}
+                >
+                  {createKnowledgeBaseMutation.isPending ? "Создание..." : "Create Dataset"}
+                </button>
+              </form>
             </div>
           </div>
 
-          <form className="upload-form documents-upload-card" onSubmit={submitUpload}>
-            <label>
-              <span>Файл</span>
-              <input
-                type="file"
-                accept=".txt,.pdf,.docx"
-                onChange={(event) => {
-                  const selected = event.target.files?.[0] ?? null;
-                  setFile(selected);
-                }}
-              />
-            </label>
-            <label>
-              <span>Source name</span>
-              <input
-                type="text"
-                value={sourceName}
-                placeholder="Например: HR handbook"
-                onChange={(event) => setSourceName(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>Теги (через запятую)</span>
-              <input
-                type="text"
-                value={tagsText}
-                placeholder="finance, legal"
-                onChange={(event) => setTagsText(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>База знаний</span>
-              <input
-                type="text"
-                list="knowledge-base-options"
-                value={knowledgeBase}
-                placeholder="Например: policies"
-                onChange={(event) => setKnowledgeBase(event.target.value)}
-              />
-              <datalist id="knowledge-base-options">
-                {knowledgeBases.map((item) => (
-                  <option key={item.name} value={item.name} />
-                ))}
-              </datalist>
-            </label>
-            <button className="primary-action documents-upload-button" type="submit" disabled={!file || uploadMutation.isPending}>
-              {uploadMutation.isPending ? "Загрузка..." : "Загрузить в базу"}
-            </button>
-          </form>
-        </section>
+          <div className="dataset-grid">
+            {knowledgeBases.map((item) => {
+              const kbDocuments = documentsByKnowledgeBase.get(item.name) ?? [];
+              const newestDocument = kbDocuments
+                .slice()
+                .sort((left, right) => (left.created_at < right.created_at ? 1 : -1))[0];
 
-        {(
-          uploadMutation.isError ||
-          documentsQuery.isError ||
-          indexMutation.isError ||
-          statsMutation.isError ||
-          deleteMutation.isError
-        ) && (
-          <ErrorBanner
-            error={
-              uploadMutation.error ??
-              documentsQuery.error ??
-              indexMutation.error ??
-              statsMutation.error ??
-              deleteMutation.error
-            }
-            copy={appErrorCopy.ru}
-            className="inline-error"
-          />
-        )}
-
-        <section className="panel documents-library-panel">
-          <div className="panel-head">
-            <h2>Library</h2>
-            <p>Карточки документов с действиями по месту.</p>
-          </div>
-          {documents.length === 0 && <p className="muted">Документы пока не загружены.</p>}
-          <div className="documents-card-grid">
-            {documents.map((document: DocumentItem) => {
-              const stats = statsByDocument[document.document_id];
-              const docJobs = jobsByDocument.get(document.document_id) ?? [];
-              const hasRunning = docJobs.some((job) => job.status === "queued" || job.status === "running");
               return (
-                <article key={document.document_id} className="document-card">
-                  <div className="document-card-top">
-                    <div>
-                      <strong>{document.file_name}</strong>
-                      <p className="muted">{formatIso(document.created_at)}</p>
-                    </div>
-                    <span className={`document-status-badge status-${document.status}`}>{document.status}</span>
+                <button
+                  key={item.name}
+                  type="button"
+                  className="dataset-tile"
+                  onClick={() => {
+                    setKnowledgeBase(item.name);
+                    navigate(`/dataset/${encodeURIComponent(item.name)}`);
+                  }}
+                >
+                  <div className="dataset-tile-badge">{makeDatasetBadge(item.name)}</div>
+                  <div className="dataset-tile-copy">
+                    <strong>{item.name}</strong>
+                    <span>{item.document_count} files</span>
+                    <span>{newestDocument ? formatIso(newestDocument.created_at) : "empty dataset"}</span>
                   </div>
-                  <div className="document-meta-grid">
-                    <div>
-                      <span>Размер</span>
-                      <strong>{formatBytes(document.size_bytes)}</strong>
-                    </div>
-                    <div>
-                      <span>База знаний</span>
-                      <strong>{document.knowledge_base}</strong>
-                    </div>
-                    <div>
-                      <span>Chunks</span>
-                      <strong>{stats?.chunks_count ?? "—"}</strong>
-                    </div>
-                    <div>
-                      <span>Теги</span>
-                      <strong>{document.tags.length ? document.tags.join(", ") : "—"}</strong>
-                    </div>
-                  </div>
-                  <div className="document-card-actions">
-                    <button
-                      type="button"
-                      className="secondary-action"
-                      disabled={indexMutation.isPending || hasRunning}
-                      onClick={() => indexMutation.mutate(document.document_id)}
-                    >
-                      {hasRunning ? "В процессе..." : "Индексировать"}
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost-action"
-                      disabled={statsMutation.isPending || deleteMutation.isPending}
-                      onClick={() => statsMutation.mutate(document.document_id)}
-                    >
-                      Обновить stats
-                    </button>
-                    <button
-                      type="button"
-                      className="danger-action"
-                      disabled={deleteMutation.isPending || hasRunning}
-                      onClick={() => deleteMutation.mutate(document.document_id)}
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </article>
+                </button>
               );
             })}
           </div>
         </section>
-      </section>
+      )}
 
-      <aside className="documents-side">
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Knowledge Bases</h2>
-            <p>Распределение библиотеки по доменам.</p>
-          </div>
-          <div className="knowledge-base-stack">
-            {knowledgeBases.length === 0 && <p className="muted">Пока нет баз знаний.</p>}
-            {knowledgeBases.map((item) => (
-              <article key={item.name} className="knowledge-base-card">
-                <strong>{item.name}</strong>
-                <span>{item.document_count} документов</span>
-              </article>
-            ))}
-          </div>
-        </section>
+      {activeKnowledgeBase && (
+        <section className="dataset-detail-layout">
+          <aside className="dataset-sidebar panel">
+            <div className="dataset-breadcrumbs">
+              <Link to="/dataset">Dataset</Link>
+              <span>/</span>
+              <span>{activeKnowledgeBase}</span>
+            </div>
+            <div className="dataset-sidebar-header">
+              <div className="dataset-sidebar-badge">{makeDatasetBadge(activeKnowledgeBase)}</div>
+              <div className="stack-xs">
+                <strong className="dataset-sidebar-title">{activeKnowledgeBase}</strong>
+                <span className="muted">
+                  {selectedDatasetInfo?.document_count ?? selectedDocuments.length} files
+                </span>
+              </div>
+            </div>
 
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Jobs</h2>
-            <p>Последние задачи индексации.</p>
-          </div>
-          <div className="jobs-list jobs-timeline">
-            {recentJobs.length === 0 && <p className="muted">Пока нет jobs.</p>}
-            {recentJobs.map((job) => (
-              <article className="job-card job-card-strong" key={job.job_id}>
-                <div className="job-head">
-                  <strong>{job.status}</strong>
-                  <span>{job.progress}%</span>
-                </div>
-                <div className="job-body">
-                  <p>job: {job.job_id}</p>
-                  <p>document: {job.document_id}</p>
-                  <p>attempt: {job.attempt}</p>
-                  {job.error_message && <p className="inline-error">{job.error_message}</p>}
-                  <p className="muted">
-                    {formatIso(job.started_at)} → {formatIso(job.finished_at)}
-                  </p>
-                </div>
+            <div className="dataset-sidebar-stats">
+              <article className="summary-chip-card">
+                <span>Indexed</span>
+                <strong>{indexedDocumentsCount}</strong>
               </article>
-            ))}
-          </div>
+              <article className="summary-chip-card">
+                <span>Total</span>
+                <strong>{selectedDocuments.length}</strong>
+              </article>
+            </div>
+
+            <form className="upload-form dataset-upload-form" onSubmit={submitUpload}>
+              <label>
+                <span>Файл</span>
+                <input
+                  type="file"
+                  accept=".txt,.pdf,.docx"
+                  onChange={(event) => {
+                    const selected = event.target.files?.[0] ?? null;
+                    setFile(selected);
+                  }}
+                />
+              </label>
+              <label>
+                <span>Source name</span>
+                <input
+                  type="text"
+                  value={sourceName}
+                  placeholder="Например: ГОСТ 30753"
+                  onChange={(event) => setSourceName(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Теги</span>
+                <input
+                  type="text"
+                value={tagsText}
+                placeholder="gost, fittings"
+                onChange={(event) => setTagsText(event.target.value)}
+              />
+              </label>
+              <button className="primary-action" type="submit" disabled={!file || uploadMutation.isPending}>
+                {uploadMutation.isPending ? "Загрузка..." : "Добавить документ"}
+              </button>
+            </form>
+          </aside>
+
+          <section className="dataset-main panel">
+            <div className="dataset-main-head">
+              <div className="panel-head">
+                <div>
+                  <span className="section-kicker">Dataset</span>
+                  <h2>{activeKnowledgeBase}</h2>
+                  <p>Документы, индексация и статусы внутри выбранной базы знаний.</p>
+                </div>
+              </div>
+              <Link to="/dataset" className="secondary-action dataset-back-link">
+                Все базы знаний
+              </Link>
+            </div>
+
+            {selectedDocuments.length === 0 ? (
+              <div className="chat-empty-state">
+                <p className="muted">В этой базе знаний пока нет документов.</p>
+              </div>
+            ) : (
+              <div className="dataset-table-wrap">
+                <div className="dataset-table">
+                  <div className="dataset-table-head">
+                    <span>Name</span>
+                    <span>Upload date</span>
+                    <span>Status</span>
+                    <span>Chunks</span>
+                    <span>Tags</span>
+                    <span>Action</span>
+                  </div>
+
+                  {selectedDocuments.map((document) => {
+                    const stats = statsByDocument[document.document_id];
+                    const docJobs = jobsByDocument.get(document.document_id) ?? [];
+                    const hasRunning = docJobs.some((job) => job.status === "queued" || job.status === "running");
+
+                    return (
+                      <article key={document.document_id} className="dataset-row">
+                        <div className="dataset-cell dataset-cell-name">
+                          <strong>{document.file_name}</strong>
+                          <span className="muted">{formatBytes(document.size_bytes)}</span>
+                        </div>
+                        <div className="dataset-cell">
+                          <span>{formatIso(document.created_at)}</span>
+                        </div>
+                        <div className="dataset-cell">
+                          <span className={`document-status-badge status-${document.status}`}>{document.status}</span>
+                        </div>
+                        <div className="dataset-cell">
+                          <span>{stats?.chunks_count ?? "—"}</span>
+                        </div>
+                        <div className="dataset-cell">
+                          <span>{document.tags.length ? document.tags.join(", ") : "—"}</span>
+                        </div>
+                        <div className="dataset-cell dataset-cell-actions">
+                          <button
+                            type="button"
+                            className="secondary-action"
+                            disabled={indexMutation.isPending || hasRunning}
+                            onClick={() => indexMutation.mutate(document.document_id)}
+                          >
+                            {hasRunning ? "В процессе..." : "Индексировать"}
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-action"
+                            disabled={statsMutation.isPending || deleteMutation.isPending}
+                            onClick={() => statsMutation.mutate(document.document_id)}
+                          >
+                            Stats
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-action"
+                            disabled={deleteMutation.isPending || hasRunning}
+                            onClick={() => deleteMutation.mutate(document.document_id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <section className="subpanel">
+              <div className="section-head-row">
+                <div>
+                  <h3>Recent jobs</h3>
+                  <p className="muted">Последние операции по этой базе знаний.</p>
+                </div>
+              </div>
+
+              <div className="jobs-list compact-jobs-list">
+                {selectedJobs.length === 0 && <p className="muted">Пока нет jobs.</p>}
+                {selectedJobs.map((job) => (
+                  <article className="job-card" key={job.job_id}>
+                    <div className="job-head">
+                      <strong>{job.status}</strong>
+                      <span>{job.progress}%</span>
+                    </div>
+                    <div className="job-body">
+                      <p>{job.job_id}</p>
+                      <p>{job.document_id}</p>
+                      <p className="muted">
+                        {formatIso(job.started_at)} → {formatIso(job.finished_at)}
+                      </p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </section>
         </section>
-      </aside>
+      )}
     </div>
   );
 }

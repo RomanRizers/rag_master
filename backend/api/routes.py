@@ -11,6 +11,8 @@ from backend.api.schemas import (
     ChatSessionCreateResponse,
     ChatSessionListResponse,
     ChatSessionMessagesResponse,
+    KnowledgeBaseCreateRequest,
+    KnowledgeBaseCreateResponse,
     DocumentIndexResponse,
     DocumentIndexStatsResponse,
     KnowledgeBaseListResponse,
@@ -153,6 +155,13 @@ async def list_knowledge_bases(request: Request):
     items = await run_in_threadpool(get_document_service(request).list_knowledge_bases)
     response = KnowledgeBaseListResponse(knowledge_bases=items)
     return JSONResponse(content=response.model_dump())
+
+
+@api_router.post("/api/knowledge-bases")
+async def create_knowledge_base(request: Request, payload: KnowledgeBaseCreateRequest, _: None = Depends(ensure_json_content_type)):
+    item = await run_in_threadpool(get_document_service(request).create_knowledge_base, payload.name)
+    response = KnowledgeBaseCreateResponse.model_validate(item)
+    return JSONResponse(content=response.model_dump(), status_code=201)
 
 
 @api_router.delete("/api/documents/{document_id}")

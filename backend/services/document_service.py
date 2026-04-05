@@ -132,10 +132,17 @@ class DocumentService:
         for item in self.store.list_documents():
             knowledge_base = _normalize_knowledge_base(item.get("knowledge_base"))
             counts[knowledge_base] = counts.get(knowledge_base, 0) + 1
-        return [
-            {"name": name, "document_count": counts[name]}
-            for name in sorted(counts.keys())
-        ]
+
+        for item in self.store.list_knowledge_bases():
+            knowledge_base = _normalize_knowledge_base(item.get("name"))
+            counts.setdefault(knowledge_base, int(item.get("document_count") or 0))
+
+        return [{"name": name, "document_count": counts[name]} for name in sorted(counts.keys())]
+
+    def create_knowledge_base(self, name: str) -> dict:
+        normalized = _normalize_knowledge_base(name)
+        self.store.create_knowledge_base(normalized)
+        return {"name": normalized, "document_count": 0}
 
     def set_status(self, document_id: str, status: str):
         updated = self.store.set_status(document_id, status)

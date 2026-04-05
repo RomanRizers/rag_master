@@ -281,6 +281,15 @@ class KnowledgeBaseListResponse(BaseModel):
     knowledge_bases: list[KnowledgeBaseListItem]
 
 
+class KnowledgeBaseCreateRequest(BaseModel):
+    name: str
+
+
+class KnowledgeBaseCreateResponse(BaseModel):
+    name: str
+    document_count: int
+
+
 class SearchFilters(BaseModel):
     knowledge_bases: list[str] | None = None
 

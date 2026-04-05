@@ -1,54 +1,86 @@
-import { useState } from "react";
+import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 
 import { ChatPage } from "./components/ChatPage";
 import { DocumentsPage } from "./components/DocumentsPage";
 import { SearchPage } from "./components/SearchPage";
 
-type TabKey = "search" | "documents" | "chat";
+type AppSection = {
+  label: string;
+  title: string;
+  subtitle: string;
+  href: string;
+};
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>("search");
+const SECTIONS: AppSection[] = [
+  {
+    label: "Dataset",
+    title: "Dataset",
+    subtitle: "Сетка баз знаний и отдельные рабочие экраны для каждой базы.",
+    href: "/dataset"
+  },
+  {
+    label: "Chat",
+    title: "Chat",
+    subtitle: "Диалог по выбранным документам и базам знаний.",
+    href: "/chat"
+  },
+  {
+    label: "Search",
+    title: "Search",
+    subtitle: "Быстрый поиск по фрагментам и источникам.",
+    href: "/search"
+  }
+];
+
+function resolveSection(pathname: string): AppSection {
+  if (pathname.startsWith("/chat")) {
+    return SECTIONS[1];
+  }
+  if (pathname.startsWith("/search")) {
+    return SECTIONS[2];
+  }
+  return SECTIONS[0];
+}
+
+function AppShell() {
+  const location = useLocation();
+  const active = resolveSection(location.pathname);
 
   return (
     <div className="page-shell">
-      <div className="ambient ambient-left" />
-      <div className="ambient ambient-right" />
-
       <main className="page app-page">
         <header className="app-header">
-          <div>
-            <h1>RAG Workspace</h1>
-            <p>Поиск, документы и чат в одном интерфейсе.</p>
+          <div className="app-header-copy">
+            <span className="section-kicker">RAG workspace</span>
+            <h1>{active.title}</h1>
+            <p>{active.subtitle}</p>
           </div>
           <nav className="tab-nav" aria-label="Навигация разделов">
-            <button
-              type="button"
-              className={`tab-btn ${activeTab === "search" ? "active" : ""}`}
-              onClick={() => setActiveTab("search")}
-            >
-              Search
-            </button>
-            <button
-              type="button"
-              className={`tab-btn ${activeTab === "documents" ? "active" : ""}`}
-              onClick={() => setActiveTab("documents")}
-            >
-              Documents
-            </button>
-            <button
-              type="button"
-              className={`tab-btn ${activeTab === "chat" ? "active" : ""}`}
-              onClick={() => setActiveTab("chat")}
-            >
-              Chat
-            </button>
+            {SECTIONS.map((section) => (
+              <NavLink
+                key={section.href}
+                to={section.href}
+                className={({ isActive }) => `tab-btn ${isActive ? "active" : ""}`}
+              >
+                {section.label}
+              </NavLink>
+            ))}
           </nav>
         </header>
 
-        {activeTab === "search" && <SearchPage embedded />}
-        {activeTab === "documents" && <DocumentsPage />}
-        {activeTab === "chat" && <ChatPage />}
+        <Routes>
+          <Route path="/" element={<Navigate to="/dataset" replace />} />
+          <Route path="/dataset" element={<DocumentsPage />} />
+          <Route path="/dataset/:datasetName" element={<DocumentsPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/search" element={<SearchPage embedded />} />
+          <Route path="*" element={<Navigate to="/dataset" replace />} />
+        </Routes>
       </main>
     </div>
   );
+}
+
+export default function App() {
+  return <AppShell />;
 }

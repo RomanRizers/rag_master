@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiRequestError } from "../api/client";
@@ -79,7 +80,13 @@ describe("DocumentsPage", () => {
       ]
     };
 
-    const markup = renderToStaticMarkup(<DocumentsPage />);
+    const markup = renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/dataset/policies"]}>
+        <Routes>
+          <Route path="/dataset/:datasetName" element={<DocumentsPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
 
     expect(markup).toContain("handbook.pdf");
     expect(markup).toContain("policies");
@@ -94,7 +101,13 @@ describe("DocumentsPage", () => {
     queryState.jobs = { jobs: [] };
     queryState.documentsError = new ApiRequestError("bad document", "parsing_failed");
 
-    const markup = renderToStaticMarkup(<DocumentsPage />);
+    const markup = renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/dataset"]}>
+        <Routes>
+          <Route path="/dataset" element={<DocumentsPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
 
     expect(markup).toContain("Документ не обработан");
     expect(markup).toContain("parsing_failed");

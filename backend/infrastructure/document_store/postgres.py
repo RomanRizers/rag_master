@@ -17,6 +17,7 @@ class PostgresDocumentStore(DocumentStore):
         self._conn.autocommit = True
 
     def create_document(self, document: dict) -> dict:
+        self.create_knowledge_base(document.get("knowledge_base") or "default")
         query = """
             INSERT INTO documents(
                 document_id, file_name, mime_type, size_bytes, status, source_name, tags_json, knowledge_base, created_at, object_key
@@ -40,6 +41,37 @@ class PostgresDocumentStore(DocumentStore):
                 ),
             )
         return self.get_document(document["document_id"]) or dict(document)
+
+    def create_knowledge_base(self, name: str) -> dict:
+        query = """
+            INSERT INTO knowledge_bases(name)
+            VALUES (%s)
+            ON CONFLICT (name) DO NOTHING
+            RETURNING name, created_at
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query, (name,))
+            row = cursor.fetchone()
+            if row is None:
+                cursor.execute(
+                    "SELECT name, created_at FROM knowledge_bases WHERE name = %s",
+                    (name,),
+                )
+                row = cursor.fetchone()
+        return {"name": row[0], "created_at": _to_iso(row[1])}
+
+    def list_knowledge_bases(self) -> list[dict]:
+        query = """
+            SELECT kb.name, COUNT(d.document_id) AS document_count
+            FROM knowledge_bases kb
+            LEFT JOIN documents d ON d.knowledge_base = kb.name
+            GROUP BY kb.name
+            ORDER BY kb.name ASC
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return [{"name": row[0], "document_count": int(row[1] or 0)} for row in rows]
 
     def get_document(self, document_id: str) -> dict | None:
         query = """

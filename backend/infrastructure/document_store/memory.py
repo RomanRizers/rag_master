@@ -8,10 +8,27 @@ from backend.infrastructure.document_store.base import DocumentStore
 class InMemoryDocumentStore(DocumentStore):
     def __init__(self):
         self._documents: dict[str, dict] = {}
+        self._knowledge_bases: dict[str, dict] = {}
         self._lock = RLock()
+
+    def create_knowledge_base(self, name: str) -> dict:
+        with self._lock:
+            record = self._knowledge_bases.get(name) or {"name": name, "created_at": None}
+            self._knowledge_bases[name] = record
+            return dict(record)
+
+    def list_knowledge_bases(self) -> list[dict]:
+        with self._lock:
+            names = set(self._knowledge_bases.keys())
+            for item in self._documents.values():
+                knowledge_base = item.get("knowledge_base") or "default"
+                names.add(knowledge_base)
+            return [{"name": name} for name in sorted(names)]
 
     def create_document(self, document: dict) -> dict:
         with self._lock:
+            knowledge_base = document.get("knowledge_base") or "default"
+            self._knowledge_bases.setdefault(knowledge_base, {"name": knowledge_base, "created_at": None})
             self._documents[document["document_id"]] = dict(document)
             return dict(self._documents[document["document_id"]])
 

@@ -160,3 +160,8 @@ export type KnowledgeBaseItem = {
 export type KnowledgeBaseListResponse = {
   knowledge_bases: KnowledgeBaseItem[];
 };
+
+export type KnowledgeBaseCreateResponse = {
+  name: string;
+  document_count: number;
+};

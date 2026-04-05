@@ -10,6 +10,7 @@ import type {
   DocumentIndexResponse,
   DocumentIndexStatsResponse,
   DocumentListResponse,
+  KnowledgeBaseCreateResponse,
   KnowledgeBaseListResponse,
   DocumentUploadResponse,
   JobListResponse,
@@ -84,6 +85,12 @@ export async function listDocuments(): Promise<DocumentListResponse> {
 
 export async function listKnowledgeBases(): Promise<KnowledgeBaseListResponse> {
   return apiGet<KnowledgeBaseListResponse>("/api/knowledge-bases");
+}
+
+export async function createKnowledgeBase(name: string): Promise<KnowledgeBaseCreateResponse> {
+  return apiPostJson<KnowledgeBaseCreateResponse, { name: string }>("/api/knowledge-bases", {
+    name
+  });
 }
 
 export async function uploadDocument(

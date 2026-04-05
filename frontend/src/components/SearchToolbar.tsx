@@ -44,9 +44,14 @@ export function SearchToolbar({
   text
 }: SearchToolbarProps) {
   return (
-    <header className="hero">
-      <div className="hero-top">
-        <div className="switches">
+    <section className="toolbar-card search-toolbar">
+      <div className="toolbar-topline">
+        <div className="toolbar-copy">
+          <span className="section-kicker">Search</span>
+          <h2>{text.title}</h2>
+          <p>{text.subtitle}</p>
+        </div>
+        <div className="toolbar-switches">
           <label className="theme-switch">
             <span>{text.themeLabel}</span>
             <select value={themeMode} onChange={(event) => onThemeModeChange(event.target.value as ThemeMode)}>
@@ -56,26 +61,23 @@ export function SearchToolbar({
             </select>
           </label>
           <div className="lang-switch" role="group" aria-label="Language switch">
-          <button
-            type="button"
-            className={language === "ru" ? "lang-btn active" : "lang-btn"}
-            onClick={() => onSwitchLanguage("ru")}
-          >
-            RU
-          </button>
-          <button
-            type="button"
-            className={language === "en" ? "lang-btn active" : "lang-btn"}
-            onClick={() => onSwitchLanguage("en")}
-          >
-            EN
-          </button>
+            <button
+              type="button"
+              className={language === "ru" ? "lang-btn active" : "lang-btn"}
+              onClick={() => onSwitchLanguage("ru")}
+            >
+              RU
+            </button>
+            <button
+              type="button"
+              className={language === "en" ? "lang-btn active" : "lang-btn"}
+              onClick={() => onSwitchLanguage("en")}
+            >
+              EN
+            </button>
           </div>
         </div>
       </div>
-
-      <h1>{text.title}</h1>
-      <p>{text.subtitle}</p>
 
       <form className="search-panel" onSubmit={onSubmit}>
         <label className="field field-query">
@@ -107,6 +109,6 @@ export function SearchToolbar({
           {loading ? "..." : text.searchButton}
         </button>
       </form>
-    </header>
+    </section>
   );
 }
