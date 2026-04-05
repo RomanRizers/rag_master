@@ -19,3 +19,7 @@ class DocumentStore(ABC):
     @abstractmethod
     def set_status(self, document_id: str, status: str) -> dict | None:
         raise NotImplementedError
+
+    @abstractmethod
+    def delete_document(self, document_id: str) -> dict | None:
+        raise NotImplementedError

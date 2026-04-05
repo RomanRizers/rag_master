@@ -133,6 +133,18 @@ class DocumentService:
         record = self.get_document(document_id)
         return self.storage.read(record.object_key)
 
+    def delete_document(self, document_id: str) -> dict:
+        record = self.get_document(document_id)
+        self.storage.delete(record.object_key)
+        deleted = self.store.delete_document(document_id)
+        if deleted is None:
+            raise DocumentError(
+                message=f"Document not found: {document_id}",
+                code="document_not_found",
+                status_code=404,
+            )
+        return StoredDocument(**deleted).public_dict()
+
     def close(self):
         close_fn = getattr(self.store, "close", None)
         if callable(close_fn):

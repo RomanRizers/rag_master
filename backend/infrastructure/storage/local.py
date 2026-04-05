@@ -41,6 +41,25 @@ class LocalFileStorageAdapter(StorageAdapter):
                 details={"object_key": object_key},
             ) from exc
 
+    def delete(self, object_key: str) -> None:
+        path = self._resolve_path(object_key)
+        try:
+            path.unlink(missing_ok=True)
+        except Exception as exc:
+            raise StorageError(
+                message="Failed to delete document content",
+                code="storage_error",
+                details={"object_key": object_key},
+            ) from exc
+
+        parent = path.parent
+        while parent != self.root and parent.exists():
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
+
     def _resolve_path(self, object_key: str) -> Path:
         candidate = (self.root / object_key).resolve()
         root_resolved = self.root.resolve()

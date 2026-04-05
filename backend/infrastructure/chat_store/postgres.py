@@ -102,6 +102,14 @@ class PostgresChatStore(ChatStore):
             )
         return True
 
+    def delete_session(self, session_id: str) -> dict | None:
+        current = next((item for item in self.list_sessions() if item["session_id"] == session_id), None)
+        if current is None:
+            return None
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute("DELETE FROM chat_sessions WHERE session_id = %s::uuid", (session_id,))
+        return current
+
     def close(self):
         with self._lock:
             self._conn.close()

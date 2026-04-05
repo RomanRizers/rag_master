@@ -122,6 +122,15 @@ class PostgresJobStore(JobStore):
             return None
         return _row_to_job(row)
 
+    def delete_jobs_for_document(self, document_id: str) -> int:
+        query = """
+            DELETE FROM ingestion_jobs
+            WHERE document_id = %s::uuid
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query, (document_id,))
+            return cursor.rowcount or 0
+
     def close(self):
         with self._lock:
             self._conn.close()

@@ -4,42 +4,35 @@ from unittest.mock import Mock, patch
 from backend.infrastructure.qdrant.client import QdrantService
 
 
-class _Point:
-    def __init__(self, point_id, payload, score):
-        self.id = point_id
-        self.payload = payload
-        self.score = score
-
-
-class _QueryResponse:
-    def __init__(self, points):
-        self.points = points
-
-
-class QdrantClientCompatibilityTestCase(unittest.TestCase):
+class QdrantServiceTestCase(unittest.TestCase):
     @patch("backend.infrastructure.qdrant.client.qdrant_client.QdrantClient")
-    def test_search_uses_query_points_when_available(self, qdrant_client_mock):
+    def test_delete_document_chunks_is_noop_when_collection_missing(self, qdrant_client_mock):
         client = Mock()
-        client.query_points.return_value = _QueryResponse([_Point("1", {"a": 1}, 0.9)])
+        client.collection_exists.return_value = False
         qdrant_client_mock.return_value = client
 
         service = QdrantService()
-        results = service.search([0.1, 0.2], top_k=1)
+        service.delete_document_chunks("doc-1")
 
-        client.query_points.assert_called_once()
-        self.assertEqual(results, [{"id": "1", "payload": {"a": 1}, "score": 0.9}])
+        client.delete.assert_not_called()
 
     @patch("backend.infrastructure.qdrant.client.qdrant_client.QdrantClient")
-    def test_search_falls_back_to_legacy_search(self, qdrant_client_mock):
-        class LegacyClient:
-            def search(self, **kwargs):
-                return [_Point("2", {"b": 2}, 0.8)]
+    def test_index_document_creates_collection_before_upsert(self, qdrant_client_mock):
+        client = Mock()
+        client.collection_exists.side_effect = [False, True]
+        qdrant_client_mock.return_value = client
 
-        qdrant_client_mock.return_value = LegacyClient()
+        class _Vector(list):
+            def tolist(self):
+                return list(self)
+
+        vector = _Vector([0.1, 0.2, 0.3])
+
         service = QdrantService()
-        results = service.search([0.1, 0.2], top_k=1)
+        service.index_document("doc", vector, "content", [])
 
-        self.assertEqual(results, [{"id": "2", "payload": {"b": 2}, "score": 0.8}])
+        client.create_collection.assert_called_once()
+        client.upsert.assert_called_once()
 
 
 if __name__ == "__main__":

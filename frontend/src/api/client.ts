@@ -4,7 +4,9 @@ import type {
   ChatMessagesResponse,
   ChatSendMessageResponse,
   ChatSessionCreateResponse,
+  ChatSessionDeleteResponse,
   ChatSessionListResponse,
+  DocumentDeleteResponse,
   DocumentIndexResponse,
   DocumentIndexStatsResponse,
   DocumentListResponse,
@@ -61,6 +63,16 @@ async function apiPostJson<TResponse, TRequest>(url: string, payload: TRequest):
   return (await response.json()) as TResponse;
 }
 
+async function apiDelete<T>(url: string): Promise<T> {
+  const response = await fetch(url, {
+    method: "DELETE"
+  });
+  if (!response.ok) {
+    return parseError(response);
+  }
+  return (await response.json()) as T;
+}
+
 export async function searchParagraphs(payload: SearchRequest): Promise<SearchResponse> {
   return apiPostJson<SearchResponse, SearchRequest>("/api/searching", payload);
 }
@@ -104,6 +116,10 @@ export async function getDocumentIndexStats(documentId: string): Promise<Documen
   return apiGet<DocumentIndexStatsResponse>(`/api/documents/${documentId}/index-stats`);
 }
 
+export async function deleteDocument(documentId: string): Promise<DocumentDeleteResponse> {
+  return apiDelete<DocumentDeleteResponse>(`/api/documents/${documentId}`);
+}
+
 export async function listJobs(status?: string, documentId?: string): Promise<JobListResponse> {
   const params = new URLSearchParams();
   if (status) {
@@ -128,6 +144,10 @@ export async function createChatSession(): Promise<ChatSessionCreateResponse> {
 
 export async function listChatSessions(): Promise<ChatSessionListResponse> {
   return apiGet<ChatSessionListResponse>("/api/chat/sessions");
+}
+
+export async function deleteChatSession(sessionId: string): Promise<ChatSessionDeleteResponse> {
+  return apiDelete<ChatSessionDeleteResponse>(`/api/chat/sessions/${sessionId}`);
 }
 
 export async function getChatMessages(sessionId: string): Promise<ChatMessagesResponse> {

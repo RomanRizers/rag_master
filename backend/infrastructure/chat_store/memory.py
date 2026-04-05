@@ -48,3 +48,16 @@ class InMemoryChatStore(ChatStore):
                 return False
             messages.append(dict(message))
             return True
+
+    def delete_session(self, session_id: str) -> dict | None:
+        with self._lock:
+            meta = self._sessions.pop(session_id, None)
+            messages = self._messages.pop(session_id, [])
+            if meta is None:
+                return None
+            return {
+                "session_id": session_id,
+                "created_at": meta["created_at"],
+                "message_count": len(messages),
+                "last_message_at": messages[-1]["created_at"] if messages else None,
+            }

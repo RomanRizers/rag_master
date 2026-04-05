@@ -37,6 +37,12 @@ class ChatService:
             self._raise_session_not_found(session_id)
         return messages
 
+    def delete_session(self, session_id: str) -> dict:
+        deleted = self.chat_store.delete_session(session_id)
+        if deleted is None:
+            self._raise_session_not_found(session_id)
+        return deleted
+
     def send_message(
         self,
         session_id: str,

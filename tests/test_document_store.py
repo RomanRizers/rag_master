@@ -64,6 +64,30 @@ class PostgresDocumentStoreTestCase(unittest.TestCase):
         docs = [item for item in store.list_documents() if item["document_id"] in set(ids)]
         self.assertEqual(len(docs), 2)
 
+    def test_delete_document(self):
+        dsn = os.getenv("RAG_TEST_POSTGRES_DSN")
+        if not dsn:
+            self.skipTest("set RAG_TEST_POSTGRES_DSN to run postgres store tests")
+        document_id = f"d-{uuid4()}"
+        store = PostgresDocumentStore(dsn=dsn)
+        store.create_document(
+            {
+                "document_id": document_id,
+                "file_name": "sample.txt",
+                "mime_type": "text/plain",
+                "size_bytes": 11,
+                "status": "uploaded",
+                "source_name": None,
+                "tags": [],
+                "created_at": "2026-04-03T00:00:00+00:00",
+                "object_key": f"{document_id}/sample.txt",
+            }
+        )
+        deleted = store.delete_document(document_id)
+        self.assertIsNotNone(deleted)
+        self.assertEqual(deleted["document_id"], document_id)
+        self.assertIsNone(store.get_document(document_id))
+
 
 if __name__ == "__main__":
     unittest.main()

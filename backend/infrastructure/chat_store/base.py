@@ -19,3 +19,7 @@ class ChatStore(ABC):
     @abstractmethod
     def append_message(self, session_id: str, message: dict) -> bool:
         raise NotImplementedError
+
+    @abstractmethod
+    def delete_session(self, session_id: str) -> dict | None:
+        raise NotImplementedError

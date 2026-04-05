@@ -51,6 +51,11 @@ export type DocumentUploadResponse = {
   created_at: string;
 };
 
+export type DocumentDeleteResponse = {
+  status: string;
+  document: DocumentItem;
+};
+
 export type DocumentIndexResponse = {
   job_id: string;
   status: string;
@@ -110,6 +115,11 @@ export type ChatSessionListResponse = {
 export type ChatSessionCreateResponse = {
   session_id: string;
   created_at: string;
+};
+
+export type ChatSessionDeleteResponse = {
+  status: string;
+  session: ChatSession;
 };
 
 export type ChatMessagesResponse = {

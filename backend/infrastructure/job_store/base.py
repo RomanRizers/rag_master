@@ -23,3 +23,7 @@ class JobStore(ABC):
     @abstractmethod
     def claim_next_queued(self, started_at: str) -> dict | None:
         raise NotImplementedError
+
+    @abstractmethod
+    def delete_jobs_for_document(self, document_id: str) -> int:
+        raise NotImplementedError

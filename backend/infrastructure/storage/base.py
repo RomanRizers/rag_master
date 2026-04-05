@@ -11,3 +11,7 @@ class StorageAdapter(ABC):
     @abstractmethod
     def read(self, object_key: str) -> bytes:
         """Read binary content by object key."""
+
+    @abstractmethod
+    def delete(self, object_key: str) -> None:
+        """Delete binary content by object key."""

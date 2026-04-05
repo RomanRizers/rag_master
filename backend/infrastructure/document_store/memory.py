@@ -31,3 +31,8 @@ class InMemoryDocumentStore(DocumentStore):
                 return None
             record["status"] = status
             return dict(record)
+
+    def delete_document(self, document_id: str) -> dict | None:
+        with self._lock:
+            record = self._documents.pop(document_id, None)
+            return dict(record) if record is not None else None

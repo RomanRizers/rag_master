@@ -62,6 +62,7 @@ class ApiServiceTestCase(unittest.TestCase):
         call_kwargs = mock_qdrant.index_document.call_args.kwargs
         self.assertEqual(call_kwargs["metadata"]["document_id"], "d1")
         self.assertEqual(call_kwargs["metadata"]["chunk_index"], 3)
+        self.assertEqual(call_kwargs["content_vector"], [0.1, 0.2])
 
     def test_delete_document_chunks_calls_qdrant(self):
         mock_qdrant = Mock()

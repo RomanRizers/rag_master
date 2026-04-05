@@ -67,6 +67,16 @@ class S3StorageAdapter(StorageAdapter):
                 details={"bucket": self.bucket, "object_key": object_key},
             ) from exc
 
+    def delete(self, object_key: str) -> None:
+        try:
+            self.client.delete_object(Bucket=self.bucket, Key=object_key)
+        except Exception as exc:
+            raise StorageError(
+                message="Failed to delete document from S3",
+                code="storage_error",
+                details={"bucket": self.bucket, "object_key": object_key},
+            ) from exc
+
     def _ensure_bucket(self):
         try:
             self.client.head_bucket(Bucket=self.bucket)
