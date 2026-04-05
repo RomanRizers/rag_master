@@ -7,6 +7,7 @@ class SearchRequest(BaseModel):
     query: str
     top_k: int = Config.TOP_K_DEFAULT
     keywords: list[str] | None = None
+    filters: "SearchFilters | None" = None
 
     @field_validator("query", mode="before")
     @classmethod
@@ -144,8 +145,9 @@ class ChatSessionMessagesResponse(BaseModel):
 class ChatFilters(BaseModel):
     document_names: list[str] | None = None
     tags: list[str] | None = None
+    knowledge_bases: list[str] | None = None
 
-    @field_validator("document_names", "tags", mode="before")
+    @field_validator("document_names", "tags", "knowledge_bases", mode="before")
     @classmethod
     def validate_string_list(cls, value):
         if value is None:
@@ -209,6 +211,7 @@ class DocumentUploadResponse(BaseModel):
     mime_type: str
     size_bytes: int
     status: str
+    knowledge_base: str
     created_at: str
 
 
@@ -261,8 +264,40 @@ class DocumentListItem(BaseModel):
     status: str
     source_name: str | None = None
     tags: list[str] = Field(default_factory=list)
+    knowledge_base: str
     created_at: str
 
 
 class DocumentListResponse(BaseModel):
     documents: list[DocumentListItem]
+
+
+class KnowledgeBaseListItem(BaseModel):
+    name: str
+    document_count: int
+
+
+class KnowledgeBaseListResponse(BaseModel):
+    knowledge_bases: list[KnowledgeBaseListItem]
+
+
+class SearchFilters(BaseModel):
+    knowledge_bases: list[str] | None = None
+
+    @field_validator("knowledge_bases", mode="before")
+    @classmethod
+    def validate_string_list(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError("Filters fields must be lists of non-empty strings")
+
+        normalized = []
+        for item in value:
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError("Filters fields must be lists of non-empty strings")
+            normalized.append(item.strip())
+        return normalized
+
+
+SearchRequest.model_rebuild()

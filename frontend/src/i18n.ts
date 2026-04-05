@@ -12,6 +12,7 @@ export type Copy = {
   found: string;
   relevance: string;
   rawScore: string;
+  knowledgeBase: string;
   content: string;
   keywords: string;
   noContent: string;
@@ -47,6 +48,7 @@ export const copy: Record<Language, Copy> = {
     found: "Показано результатов",
     relevance: "Релевантность",
     rawScore: "Raw score",
+    knowledgeBase: "База знаний",
     content: "Контент",
     keywords: "Ключевые слова",
     noContent: "Контент отсутствует",
@@ -80,6 +82,7 @@ export const copy: Record<Language, Copy> = {
     found: "Visible results",
     relevance: "Relevance",
     rawScore: "Raw score",
+    knowledgeBase: "Knowledge base",
     content: "Content",
     keywords: "Keywords",
     noContent: "No content",

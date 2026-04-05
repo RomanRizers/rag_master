@@ -12,6 +12,8 @@ from backend.ingestion.file_types import resolve_upload_mime_type
 from backend.infrastructure.document_store import DocumentStore, create_document_store
 from backend.infrastructure.storage import StorageAdapter, create_storage_adapter
 
+DEFAULT_KNOWLEDGE_BASE = "default"
+
 
 @dataclass
 class StoredDocument:
@@ -22,6 +24,7 @@ class StoredDocument:
     status: str
     source_name: str | None
     tags: list[str]
+    knowledge_base: str
     created_at: str
     object_key: str
 
@@ -34,6 +37,7 @@ class StoredDocument:
             "status": self.status,
             "source_name": self.source_name,
             "tags": list(self.tags),
+            "knowledge_base": self.knowledge_base,
             "created_at": self.created_at,
         }
 
@@ -50,6 +54,7 @@ class DocumentService:
         content_bytes: bytes,
         source_name: str | None = None,
         tags: list[str] | None = None,
+        knowledge_base: str | None = None,
     ) -> dict:
         if len(content_bytes) > Config.MAX_UPLOAD_SIZE_BYTES:
             raise ValidationError(
@@ -84,6 +89,7 @@ class DocumentService:
             status="uploaded",
             source_name=source_name.strip() if isinstance(source_name, str) and source_name.strip() else None,
             tags=[tag.strip() for tag in (tags or []) if isinstance(tag, str) and tag.strip()],
+            knowledge_base=_normalize_knowledge_base(knowledge_base),
             created_at=_now_iso(),
             object_key=object_key,
         )
@@ -96,6 +102,7 @@ class DocumentService:
                 "status": record.status,
                 "source_name": record.source_name,
                 "tags": list(record.tags),
+                "knowledge_base": record.knowledge_base,
                 "created_at": record.created_at,
                 "object_key": record.object_key,
             }
@@ -119,6 +126,16 @@ class DocumentService:
         ]
         items.sort(key=lambda item: item["created_at"], reverse=True)
         return items
+
+    def list_knowledge_bases(self) -> list[dict]:
+        counts: dict[str, int] = {}
+        for item in self.store.list_documents():
+            knowledge_base = _normalize_knowledge_base(item.get("knowledge_base"))
+            counts[knowledge_base] = counts.get(knowledge_base, 0) + 1
+        return [
+            {"name": name, "document_count": counts[name]}
+            for name in sorted(counts.keys())
+        ]
 
     def set_status(self, document_id: str, status: str):
         updated = self.store.set_status(document_id, status)
@@ -158,3 +175,9 @@ def _now_iso() -> str:
 def _safe_file_name(file_name: str) -> str:
     name = Path(file_name or "document.bin").name.strip()
     return name or "document.bin"
+
+
+def _normalize_knowledge_base(value: str | None) -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return DEFAULT_KNOWLEDGE_BASE

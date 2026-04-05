@@ -10,7 +10,7 @@ class ApiService:
         self.qdrant_service = qdrant_service or QdrantService()
         self.vectorizer = vectorizer or TextVectorizer()
 
-    def search_query(self, query: str, top_k: int, keywords: list = None):
+    def search_query(self, query: str, top_k: int, keywords: list = None, filters: dict | None = None):
         """Выполняет поиск по запросу и возвращает результаты."""
         if keywords:
             keywords = [kw.lower() for kw in keywords]
@@ -29,7 +29,7 @@ class ApiService:
             raise VectorizationError(details={"reason": str(error)}) from error
 
         try:
-            search_results = self.qdrant_service.search(query_vector, top_k, keywords)
+            search_results = self.qdrant_service.search(query_vector, top_k, keywords, filters=filters)
         except StorageError:
             raise
         except Exception as error:

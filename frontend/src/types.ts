@@ -6,6 +6,7 @@ export type SearchResult = {
     keywords?: string[];
     document_name?: string;
     page?: number;
+    knowledge_base?: string;
   };
 };
 
@@ -17,6 +18,9 @@ export type SearchResponse = {
 export type SearchRequest = {
   query: string;
   top_k: number;
+  filters?: {
+    knowledge_bases?: string[];
+  };
 };
 
 export type ApiErrorResponse = {
@@ -35,6 +39,7 @@ export type DocumentItem = {
   status: string;
   source_name?: string | null;
   tags: string[];
+  knowledge_base: string;
   created_at: string;
 };
 
@@ -48,6 +53,7 @@ export type DocumentUploadResponse = {
   mime_type: string;
   size_bytes: number;
   status: string;
+  knowledge_base: string;
   created_at: string;
 };
 
@@ -130,6 +136,7 @@ export type ChatMessagesResponse = {
 export type ChatFilters = {
   document_names?: string[];
   tags?: string[];
+  knowledge_bases?: string[];
 };
 
 export type ChatMessageRequest = {
@@ -143,4 +150,13 @@ export type ChatSendMessageResponse = {
   session_id: string;
   user_message: ChatMessage;
   assistant_message: ChatMessage;
+};
+
+export type KnowledgeBaseItem = {
+  name: string;
+  document_count: number;
+};
+
+export type KnowledgeBaseListResponse = {
+  knowledge_bases: KnowledgeBaseItem[];
 };

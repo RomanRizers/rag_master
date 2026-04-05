@@ -15,23 +15,29 @@ class QdrantService:
         self.collection_name = Config.COLLECTION_NAME
         logger.info("qdrant_client_initialized", qdrant_url=Config.QDRANT_URL, collection_name=self.collection_name)
 
-    def search(self, query_vector, top_k, keywords=None):
+    def search(self, query_vector, top_k, keywords=None, filters=None):
         """Выполняет поиск в коллекции с использованием вектора запроса и фильтрации."""
-        query_filter = None
+        must_conditions = []
         if keywords:
             if isinstance(keywords, str):
                 keywords = [keywords.lower()]
             else:
                 keywords = [kw.lower() for kw in keywords]
-
-            query_filter = Filter(
-                must=[
-                    FieldCondition(
-                        key="keywords",
-                        match=MatchAny(any=keywords)
-                    )
-                ]
+            must_conditions.append(
+                FieldCondition(
+                    key="keywords",
+                    match=MatchAny(any=keywords)
+                )
             )
+        knowledge_bases = filters.get("knowledge_bases") if isinstance(filters, dict) else None
+        if knowledge_bases:
+            must_conditions.append(
+                FieldCondition(
+                    key="knowledge_base",
+                    match=MatchAny(any=[str(item).strip() for item in knowledge_bases if str(item).strip()])
+                )
+            )
+        query_filter = Filter(must=must_conditions) if must_conditions else None
         logger.info("qdrant_search_started", top_k=top_k, keywords_count=len(keywords) if keywords else 0)
 
         try:

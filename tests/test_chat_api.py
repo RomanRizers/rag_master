@@ -27,6 +27,7 @@ def _fake_retriever(query, top_k, keywords, filters=None):
                     "page": 3,
                     "content": "Это релевантный фрагмент для ответа ассистента.",
                     "tags": ["finance", "contracts"],
+                    "knowledge_base": "policies",
                 },
             },
             {
@@ -36,6 +37,7 @@ def _fake_retriever(query, top_k, keywords, filters=None):
                     "page": 1,
                     "content": "Другой фрагмент для проверки фильтра.",
                     "tags": ["hr"],
+                    "knowledge_base": "hr",
                 },
             },
         ],
@@ -151,6 +153,26 @@ class ChatApiTestCase(unittest.TestCase):
             json={
                 "message": "hello",
                 "filters": {"document_names": ["TestDoc.pdf"], "tags": ["finance"]},
+            },
+        )
+        self.assertEqual(send_response.status_code, 200)
+        payload = send_response.json()
+        citations = payload["assistant_message"]["citations"]
+        self.assertEqual(len(citations), 1)
+        self.assertEqual(citations[0]["document_name"], "TestDoc.pdf")
+
+    @patch("backend.api.routes.get_chat_service")
+    def test_send_message_supports_knowledge_base_filter(self, get_chat_service_mock):
+        get_chat_service_mock.return_value = self.chat_service
+
+        create_response = self.client.post("/api/chat/sessions")
+        session_id = create_response.json()["session_id"]
+
+        send_response = self.client.post(
+            f"/api/chat/sessions/{session_id}/messages",
+            json={
+                "message": "hello",
+                "filters": {"knowledge_bases": ["policies"]},
             },
         )
         self.assertEqual(send_response.status_code, 200)

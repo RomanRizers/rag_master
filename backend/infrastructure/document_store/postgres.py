@@ -19,9 +19,9 @@ class PostgresDocumentStore(DocumentStore):
     def create_document(self, document: dict) -> dict:
         query = """
             INSERT INTO documents(
-                document_id, file_name, mime_type, size_bytes, status, source_name, tags_json, created_at, object_key
+                document_id, file_name, mime_type, size_bytes, status, source_name, tags_json, knowledge_base, created_at, object_key
             )
-            VALUES (%s::uuid, %s, %s, %s, %s, %s, %s::jsonb, %s::timestamptz, %s)
+            VALUES (%s::uuid, %s, %s, %s, %s, %s, %s::jsonb, %s, %s::timestamptz, %s)
         """
         with self._lock, self._conn.cursor() as cursor:
             cursor.execute(
@@ -34,6 +34,7 @@ class PostgresDocumentStore(DocumentStore):
                     document["status"],
                     document.get("source_name"),
                     json.dumps(document.get("tags") or [], ensure_ascii=False),
+                    document.get("knowledge_base") or "default",
                     document["created_at"],
                     document["object_key"],
                 ),
@@ -42,7 +43,7 @@ class PostgresDocumentStore(DocumentStore):
 
     def get_document(self, document_id: str) -> dict | None:
         query = """
-            SELECT document_id, file_name, mime_type, size_bytes, status, source_name, tags_json, created_at, object_key
+            SELECT document_id, file_name, mime_type, size_bytes, status, source_name, tags_json, knowledge_base, created_at, object_key
             FROM documents
             WHERE document_id = %s::uuid
         """
@@ -55,7 +56,7 @@ class PostgresDocumentStore(DocumentStore):
 
     def list_documents(self) -> list[dict]:
         query = """
-            SELECT document_id, file_name, mime_type, size_bytes, status, source_name, tags_json, created_at, object_key
+            SELECT document_id, file_name, mime_type, size_bytes, status, source_name, tags_json, knowledge_base, created_at, object_key
             FROM documents
             ORDER BY created_at DESC
         """
@@ -94,8 +95,9 @@ def _row_to_document(row: tuple) -> dict:
         "status": row[4],
         "source_name": row[5],
         "tags": _parse_json_value(row[6]),
-        "created_at": _to_iso(row[7]),
-        "object_key": row[8],
+        "knowledge_base": row[7] or "default",
+        "created_at": _to_iso(row[8]),
+        "object_key": row[9],
     }
 
 

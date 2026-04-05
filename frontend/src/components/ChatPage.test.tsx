@@ -29,6 +29,13 @@ vi.mock("@tanstack/react-query", () => ({
         error: null
       };
     }
+    if (key === "knowledge-bases") {
+      return {
+        data: { knowledge_bases: [{ name: "policies", document_count: 2 }] },
+        isError: false,
+        error: null
+      };
+    }
     return {
       data: undefined,
       isError: false,

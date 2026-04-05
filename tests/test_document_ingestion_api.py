@@ -71,6 +71,7 @@ class _FakeIngestionService:
             "status": "uploaded",
             "source_name": "manual",
             "tags": ["tag-a", "tag-b"],
+            "knowledge_base": "policies",
             "created_at": "2026-04-05T00:00:00+00:00",
         }
 
@@ -89,13 +90,14 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
         upload_response = self.client.post(
             "/api/documents/upload",
             files={"file": ("sample.txt", b"hello world", "text/plain")},
-            data={"source_name": "manual", "tags": ["tag-a", "tag-b"]},
+            data={"source_name": "manual", "tags": ["tag-a", "tag-b"], "knowledge_base": "policies"},
         )
         self.assertEqual(upload_response.status_code, 201)
         payload = upload_response.json()
         self.assertEqual(payload["file_name"], "sample.txt")
         self.assertEqual(payload["status"], "uploaded")
         self.assertEqual(payload["size_bytes"], 11)
+        self.assertEqual(payload["knowledge_base"], "policies")
 
         list_response = self.client.get("/api/documents")
         self.assertEqual(list_response.status_code, 200)
@@ -103,6 +105,7 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
         self.assertEqual(len(documents), 1)
         self.assertEqual(documents[0]["source_name"], "manual")
         self.assertEqual(documents[0]["tags"], ["tag-a", "tag-b"])
+        self.assertEqual(documents[0]["knowledge_base"], "policies")
 
     @patch("backend.api.routes.get_document_service")
     @patch("backend.api.routes.get_ingestion_service")
@@ -222,6 +225,27 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
         self.assertEqual(payload["status"], "deleted")
         self.assertEqual(payload["document"]["document_id"], document_id)
         self.assertEqual(self.ingestion_service.deleted_document_ids, [document_id])
+
+    @patch("backend.api.routes.get_document_service")
+    def test_list_knowledge_bases_endpoint(self, get_document_service_mock):
+        get_document_service_mock.return_value = self.document_service
+
+        self.client.post(
+            "/api/documents/upload",
+            files={"file": ("sample.txt", b"hello world", "text/plain")},
+            data={"knowledge_base": "policies"},
+        )
+        self.client.post(
+            "/api/documents/upload",
+            files={"file": ("guide.txt", b"hello world", "text/plain")},
+            data={"knowledge_base": "hr"},
+        )
+
+        response = self.client.get("/api/knowledge-bases")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        names = {item["name"] for item in payload["knowledge_bases"]}
+        self.assertEqual(names, {"hr", "policies"})
 
     @patch("backend.api.routes.get_document_service")
     @patch("backend.api.routes.get_ingestion_service")

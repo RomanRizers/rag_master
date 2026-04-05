@@ -17,7 +17,7 @@ describe("api client", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await searchParagraphs({ query: "hello", top_k: 2 });
+    const result = await searchParagraphs({ query: "hello", top_k: 2, filters: { knowledge_bases: ["policies"] } });
 
     expect(fetchMock).toHaveBeenCalledWith("/api/searching", expect.any(Object));
     expect(result.total).toBe(1);

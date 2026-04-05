@@ -13,6 +13,7 @@ SCHEMA_SQL = [
         status TEXT NOT NULL,
         source_name TEXT,
         tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+        knowledge_base TEXT NOT NULL DEFAULT 'default',
         created_at TIMESTAMPTZ NOT NULL,
         object_key TEXT NOT NULL UNIQUE
     )

@@ -29,6 +29,7 @@ class PostgresDocumentStoreTestCase(unittest.TestCase):
                 "status": "uploaded",
                 "source_name": "manual",
                 "tags": ["a", "b"],
+                "knowledge_base": "policies",
                 "created_at": "2026-04-03T00:00:00+00:00",
                 "object_key": f"{document_id}/sample.txt",
             }
@@ -36,6 +37,7 @@ class PostgresDocumentStoreTestCase(unittest.TestCase):
         loaded = store.get_document(document_id)
         self.assertIsNotNone(loaded)
         self.assertEqual(loaded["file_name"], "sample.txt")
+        self.assertEqual(loaded["knowledge_base"], "policies")
         updated = store.set_status(document_id, "indexed")
         self.assertEqual(updated["status"], "indexed")
 
@@ -57,6 +59,7 @@ class PostgresDocumentStoreTestCase(unittest.TestCase):
                     "status": "uploaded",
                     "source_name": None,
                     "tags": [],
+                    "knowledge_base": f"kb-{index}",
                     "created_at": f"2026-04-03T00:00:0{index}+00:00",
                     "object_key": f"{document_id}/sample.txt",
                 }
@@ -79,6 +82,7 @@ class PostgresDocumentStoreTestCase(unittest.TestCase):
                 "status": "uploaded",
                 "source_name": None,
                 "tags": [],
+                "knowledge_base": "policies",
                 "created_at": "2026-04-03T00:00:00+00:00",
                 "object_key": f"{document_id}/sample.txt",
             }

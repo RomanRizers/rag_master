@@ -7,6 +7,7 @@ import {
   deleteChatSession,
   getChatMessages,
   listChatSessions,
+  listKnowledgeBases,
   sendChatMessage,
   streamChatMessage
 } from "../api/client";
@@ -33,6 +34,7 @@ export function ChatPage() {
   const [topK, setTopK] = useState(5);
   const [docNamesText, setDocNamesText] = useState("");
   const [tagsText, setTagsText] = useState("");
+  const [selectedKnowledgeBases, setSelectedKnowledgeBases] = useState<string[]>([]);
   const [streaming, setStreaming] = useState(true);
   const [streamText, setStreamText] = useState("");
   const [streamCitations, setStreamCitations] = useState<ChatCitation[]>([]);
@@ -47,6 +49,12 @@ export function ChatPage() {
     queryKey: ["chat-messages", activeSessionId],
     queryFn: () => getChatMessages(activeSessionId),
     enabled: Boolean(activeSessionId)
+  });
+
+  const knowledgeBasesQuery = useQuery({
+    queryKey: ["knowledge-bases"],
+    queryFn: listKnowledgeBases,
+    refetchInterval: 7000
   });
 
   const createSessionMutation = useMutation({
@@ -95,7 +103,8 @@ export function ChatPage() {
         top_k: topK,
         filters: {
           document_names: documentNames,
-          tags
+          tags,
+          knowledge_bases: selectedKnowledgeBases
         }
       };
 
@@ -140,6 +149,12 @@ export function ChatPage() {
   function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     sendMutation.mutate();
+  }
+
+  function toggleKnowledgeBase(value: string) {
+    setSelectedKnowledgeBases((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
+    );
   }
 
   return (
@@ -305,6 +320,28 @@ export function ChatPage() {
               <input type="checkbox" checked={streaming} onChange={(event) => setStreaming(event.target.checked)} />
               <span>Streaming SSE</span>
             </label>
+          </div>
+          <div className="knowledge-base-filter">
+            <div className="filter-headline">
+              <span>Базы знаний</span>
+              {selectedKnowledgeBases.length > 0 && (
+                <button type="button" className="text-button" onClick={() => setSelectedKnowledgeBases([])}>
+                  Сбросить
+                </button>
+              )}
+            </div>
+            <div className="keyword-chips">
+              {(knowledgeBasesQuery.data?.knowledge_bases ?? []).map((item) => (
+                <button
+                  key={item.name}
+                  type="button"
+                  className={`keyword-chip ${selectedKnowledgeBases.includes(item.name) ? "active" : ""}`}
+                  onClick={() => toggleKnowledgeBase(item.name)}
+                >
+                  {item.name} ({item.document_count})
+                </button>
+              ))}
+            </div>
           </div>
         </form>
       </section>
