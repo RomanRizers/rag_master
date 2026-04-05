@@ -13,6 +13,10 @@ export type Copy = {
   relevance: string;
   rawScore: string;
   knowledgeBase: string;
+  source: string;
+  document: string;
+  page: string;
+  excerpt: string;
   content: string;
   keywords: string;
   noContent: string;
@@ -29,6 +33,11 @@ export type Copy = {
   copyContent: string;
   copyKeywords: string;
   copied: string;
+  details: string;
+  close: string;
+  fullPreview: string;
+  openDocument: string;
+  openPage: string;
   themeLabel: string;
   themeLight: string;
   themeDark: string;
@@ -49,6 +58,10 @@ export const copy: Record<Language, Copy> = {
     relevance: "Релевантность",
     rawScore: "Raw score",
     knowledgeBase: "База знаний",
+    source: "Источник",
+    document: "Документ",
+    page: "Страница",
+    excerpt: "Фрагмент",
     content: "Контент",
     keywords: "Ключевые слова",
     noContent: "Контент отсутствует",
@@ -65,6 +78,11 @@ export const copy: Record<Language, Copy> = {
     copyContent: "Копировать контент",
     copyKeywords: "Копировать ключевые слова",
     copied: "Скопировано",
+    details: "Подробнее",
+    close: "Закрыть",
+    fullPreview: "Полный preview",
+    openDocument: "Открыть документ",
+    openPage: "Перейти к странице",
     themeLabel: "Тема",
     themeLight: "Светлая",
     themeDark: "Темная",
@@ -83,6 +101,10 @@ export const copy: Record<Language, Copy> = {
     relevance: "Relevance",
     rawScore: "Raw score",
     knowledgeBase: "Knowledge base",
+    source: "Source",
+    document: "Document",
+    page: "Page",
+    excerpt: "Excerpt",
     content: "Content",
     keywords: "Keywords",
     noContent: "No content",
@@ -99,6 +121,11 @@ export const copy: Record<Language, Copy> = {
     copyContent: "Copy content",
     copyKeywords: "Copy keywords",
     copied: "Copied",
+    details: "Details",
+    close: "Close",
+    fullPreview: "Full preview",
+    openDocument: "Open document",
+    openPage: "Jump to page",
     themeLabel: "Theme",
     themeLight: "Light",
     themeDark: "Dark",

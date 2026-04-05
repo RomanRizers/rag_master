@@ -2,6 +2,7 @@ export type SearchResult = {
   id: string;
   score: number;
   payload: {
+    document_id?: string;
     content?: string;
     keywords?: string[];
     document_name?: string;
@@ -154,9 +155,21 @@ export type ChatSendMessageResponse = {
 
 export type KnowledgeBaseItem = {
   name: string;
+  created_at: string;
   document_count: number;
 };
 
 export type KnowledgeBaseListResponse = {
   knowledge_bases: KnowledgeBaseItem[];
+};
+
+export type KnowledgeBaseDeleteResponse = {
+  status: string;
+  knowledge_base: KnowledgeBaseItem;
+};
+
+export type KnowledgeBaseMoveDocumentsResponse = {
+  status: string;
+  target_knowledge_base: string;
+  moved_documents: DocumentItem[];
 };

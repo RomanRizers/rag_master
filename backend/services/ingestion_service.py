@@ -96,6 +96,25 @@ class IngestionService:
         self.job_store.delete_jobs_for_document(document_id)
         return self.document_service.delete_document(document_id)
 
+    def rename_knowledge_base(self, current_name: str, new_name: str) -> dict:
+        source_documents = [
+            item for item in self.document_service.list_documents()
+            if item.get("knowledge_base") == current_name
+        ]
+        renamed = self.document_service.rename_knowledge_base(current_name, new_name)
+        for item in source_documents:
+            self.api_service.update_document_knowledge_base(item["document_id"], renamed["name"])
+        return renamed
+
+    def delete_knowledge_base(self, name: str) -> dict:
+        return self.document_service.delete_knowledge_base(name)
+
+    def move_documents_to_knowledge_base(self, document_ids: list[str], target_knowledge_base: str) -> list[dict]:
+        moved = self.document_service.move_documents_to_knowledge_base(document_ids, target_knowledge_base)
+        for item in moved:
+            self.api_service.update_document_knowledge_base(item["document_id"], item["knowledge_base"])
+        return moved
+
     def _run_job(self, job_id: str):
         job = self.get_job(job_id)
         if job["status"] != "running":

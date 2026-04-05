@@ -34,6 +34,17 @@ class QdrantServiceTestCase(unittest.TestCase):
         client.create_collection.assert_called_once()
         client.upsert.assert_called_once()
 
+    @patch("backend.infrastructure.qdrant.client.qdrant_client.QdrantClient")
+    def test_update_document_knowledge_base_is_noop_when_collection_missing(self, qdrant_client_mock):
+        client = Mock()
+        client.collection_exists.return_value = False
+        qdrant_client_mock.return_value = client
+
+        service = QdrantService()
+        service.update_document_knowledge_base("doc-1", "kb-2")
+
+        client.set_payload.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

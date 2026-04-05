@@ -67,6 +67,45 @@ class PostgresDocumentStoreTestCase(unittest.TestCase):
         docs = [item for item in store.list_documents() if item["document_id"] in set(ids)]
         self.assertEqual(len(docs), 2)
 
+    def test_create_and_list_knowledge_bases(self):
+        dsn = os.getenv("RAG_TEST_POSTGRES_DSN")
+        if not dsn:
+            self.skipTest("set RAG_TEST_POSTGRES_DSN to run postgres store tests")
+        store = PostgresDocumentStore(dsn=dsn)
+        base_name = f"kb-{uuid4()}"
+        created = store.create_knowledge_base({"name": base_name, "created_at": "2026-04-05T00:00:00+00:00"})
+        self.assertEqual(created["name"], base_name)
+        listed = {item["name"] for item in store.list_knowledge_bases()}
+        self.assertIn(base_name, listed)
+
+    def test_update_document_knowledge_base(self):
+        dsn = os.getenv("RAG_TEST_POSTGRES_DSN")
+        if not dsn:
+            self.skipTest("set RAG_TEST_POSTGRES_DSN to run postgres store tests")
+        document_id = str(uuid4())
+        store = PostgresDocumentStore(dsn=dsn)
+        store.create_knowledge_base({"name": "kb-source", "created_at": "2026-04-05T00:00:00+00:00"})
+        store.create_knowledge_base({"name": "kb-target", "created_at": "2026-04-05T00:00:00+00:00"})
+        store.create_document(
+            {
+                "document_id": document_id,
+                "file_name": "sample.txt",
+                "mime_type": "text/plain",
+                "size_bytes": 11,
+                "status": "uploaded",
+                "source_name": None,
+                "tags": [],
+                "knowledge_base": "kb-source",
+                "created_at": "2026-04-03T00:00:00+00:00",
+                "object_key": f"{document_id}/sample.txt",
+            }
+        )
+
+        updated = store.update_document_knowledge_base(document_id, "kb-target")
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated["knowledge_base"], "kb-target")
+
     def test_delete_document(self):
         dsn = os.getenv("RAG_TEST_POSTGRES_DSN")
         if not dsn:

@@ -11,6 +11,9 @@ class _FakeIngestionService:
     def __init__(self):
         self.jobs = {}
         self.deleted_document_ids = []
+        self.deleted_knowledge_bases = []
+        self.renamed_knowledge_bases = []
+        self.moved_documents = []
 
     def start_indexing(self, document_id: str):
         job = {
@@ -74,6 +77,39 @@ class _FakeIngestionService:
             "knowledge_base": "policies",
             "created_at": "2026-04-05T00:00:00+00:00",
         }
+
+    def rename_knowledge_base(self, current_name: str, new_name: str):
+        self.renamed_knowledge_bases.append((current_name, new_name))
+        return {
+            "name": new_name,
+            "created_at": "2026-04-05T00:00:00+00:00",
+            "document_count": 2,
+        }
+
+    def delete_knowledge_base(self, name: str):
+        self.deleted_knowledge_bases.append(name)
+        return {
+            "name": name,
+            "created_at": "2026-04-05T00:00:00+00:00",
+            "document_count": 0,
+        }
+
+    def move_documents_to_knowledge_base(self, document_ids: list[str], target_knowledge_base: str):
+        self.moved_documents.append((tuple(document_ids), target_knowledge_base))
+        return [
+            {
+                "document_id": document_id,
+                "file_name": f"{document_id}.txt",
+                "mime_type": "text/plain",
+                "size_bytes": 11,
+                "status": "uploaded",
+                "source_name": None,
+                "tags": [],
+                "knowledge_base": target_knowledge_base,
+                "created_at": "2026-04-05T00:00:00+00:00",
+            }
+            for document_id in document_ids
+        ]
 
 
 class DocumentIngestionApiTestCase(unittest.TestCase):
@@ -231,9 +267,9 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
         get_document_service_mock.return_value = self.document_service
 
         self.client.post(
-            "/api/documents/upload",
-            files={"file": ("sample.txt", b"hello world", "text/plain")},
-            data={"knowledge_base": "policies"},
+            "/api/knowledge-bases",
+            json={"name": "policies"},
+            headers={"Content-Type": "application/json"},
         )
         self.client.post(
             "/api/documents/upload",
@@ -244,8 +280,75 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
         response = self.client.get("/api/knowledge-bases")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        names = {item["name"] for item in payload["knowledge_bases"]}
-        self.assertEqual(names, {"hr", "policies"})
+        items = {item["name"]: item for item in payload["knowledge_bases"]}
+        self.assertEqual(set(items.keys()), {"hr", "policies"})
+        self.assertEqual(items["policies"]["document_count"], 0)
+        self.assertEqual(items["hr"]["document_count"], 1)
+        self.assertTrue(items["policies"]["created_at"])
+
+    @patch("backend.api.routes.get_document_service")
+    def test_create_knowledge_base_endpoint(self, get_document_service_mock):
+        get_document_service_mock.return_value = self.document_service
+
+        response = self.client.post(
+            "/api/knowledge-bases",
+            json={"name": "engineering"},
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["name"], "engineering")
+        self.assertEqual(payload["document_count"], 0)
+        self.assertTrue(payload["created_at"])
+
+    @patch("backend.api.routes.get_document_service")
+    @patch("backend.api.routes.get_ingestion_service")
+    def test_rename_knowledge_base_endpoint(self, get_ingestion_service_mock, get_document_service_mock):
+        get_document_service_mock.return_value = self.document_service
+        get_ingestion_service_mock.return_value = self.ingestion_service
+
+        response = self.client.patch(
+            "/api/knowledge-bases/policies",
+            json={"name": "standards"},
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["name"], "standards")
+        self.assertEqual(self.ingestion_service.renamed_knowledge_bases, [("policies", "standards")])
+
+    @patch("backend.api.routes.get_document_service")
+    @patch("backend.api.routes.get_ingestion_service")
+    def test_delete_knowledge_base_endpoint(self, get_ingestion_service_mock, get_document_service_mock):
+        get_document_service_mock.return_value = self.document_service
+        get_ingestion_service_mock.return_value = self.ingestion_service
+
+        response = self.client.delete("/api/knowledge-bases/empty-kb")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "deleted")
+        self.assertEqual(self.ingestion_service.deleted_knowledge_bases, ["empty-kb"])
+
+    @patch("backend.api.routes.get_document_service")
+    @patch("backend.api.routes.get_ingestion_service")
+    def test_move_documents_between_knowledge_bases_endpoint(self, get_ingestion_service_mock, get_document_service_mock):
+        get_document_service_mock.return_value = self.document_service
+        get_ingestion_service_mock.return_value = self.ingestion_service
+
+        first = self.document_service.create_document("one.txt", "text/plain", b"one", knowledge_base="policies")
+        second = self.document_service.create_document("two.txt", "text/plain", b"two", knowledge_base="policies")
+
+        response = self.client.post(
+            "/api/knowledge-bases/policies/documents/move",
+            json={
+                "document_ids": [first["document_id"], second["document_id"]],
+                "target_knowledge_base": "standards",
+            },
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "moved")
+        self.assertEqual(payload["target_knowledge_base"], "standards")
+        self.assertEqual(len(payload["moved_documents"]), 2)
 
     @patch("backend.api.routes.get_document_service")
     @patch("backend.api.routes.get_ingestion_service")

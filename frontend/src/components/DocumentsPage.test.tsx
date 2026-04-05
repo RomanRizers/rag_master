@@ -7,6 +7,7 @@ import { DocumentsPage } from "./DocumentsPage";
 type QueryState = {
   documents?: unknown;
   jobs?: unknown;
+  knowledgeBases?: unknown;
   documentsError?: unknown;
 };
 
@@ -25,6 +26,13 @@ vi.mock("@tanstack/react-query", () => ({
     if (key === "jobs") {
       return {
         data: queryState.jobs,
+        isError: false,
+        error: null
+      };
+    }
+    if (key === "knowledge-bases") {
+      return {
+        data: queryState.knowledgeBases,
         isError: false,
         error: null
       };
@@ -78,12 +86,23 @@ describe("DocumentsPage", () => {
         }
       ]
     };
+    queryState.knowledgeBases = {
+      knowledge_bases: [
+        {
+          name: "policies",
+          created_at: "2026-04-04T09:00:00Z",
+          document_count: 1
+        }
+      ]
+    };
 
     const markup = renderToStaticMarkup(<DocumentsPage />);
 
     expect(markup).toContain("handbook.pdf");
     expect(markup).toContain("policies");
     expect(markup).toContain("hr, policy");
+    expect(markup).toContain("Knowledge Datasets");
+    expect(markup).toContain("Создать базу");
     expect(markup).toContain("done");
     expect(markup).toContain("100%");
     expect(markup).toContain("job-1");
@@ -92,6 +111,7 @@ describe("DocumentsPage", () => {
   it("shows a friendly parsing error banner", () => {
     queryState.documents = undefined;
     queryState.jobs = { jobs: [] };
+    queryState.knowledgeBases = { knowledge_bases: [] };
     queryState.documentsError = new ApiRequestError("bad document", "parsing_failed");
 
     const markup = renderToStaticMarkup(<DocumentsPage />);

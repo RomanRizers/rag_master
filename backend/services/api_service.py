@@ -125,3 +125,16 @@ class ApiService:
             ) from error
         logger.info("list_indexed_document_ids_finished", documents_count=len(ids))
         return ids
+
+    def update_document_knowledge_base(self, document_id: str, knowledge_base: str):
+        logger.info("update_document_knowledge_base_started", document_id=document_id, knowledge_base=knowledge_base)
+        try:
+            self.qdrant_service.update_document_knowledge_base(document_id, knowledge_base)
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while updating document knowledge base",
+                details={"document_id": document_id, "knowledge_base": knowledge_base, "reason": str(error)},
+            ) from error
+        logger.info("update_document_knowledge_base_finished", document_id=document_id, knowledge_base=knowledge_base)

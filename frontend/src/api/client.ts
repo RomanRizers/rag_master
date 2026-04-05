@@ -10,7 +10,9 @@ import type {
   DocumentIndexResponse,
   DocumentIndexStatsResponse,
   DocumentListResponse,
+  KnowledgeBaseDeleteResponse,
   KnowledgeBaseListResponse,
+  KnowledgeBaseMoveDocumentsResponse,
   DocumentUploadResponse,
   JobListResponse,
   SearchRequest,
@@ -84,6 +86,48 @@ export async function listDocuments(): Promise<DocumentListResponse> {
 
 export async function listKnowledgeBases(): Promise<KnowledgeBaseListResponse> {
   return apiGet<KnowledgeBaseListResponse>("/api/knowledge-bases");
+}
+
+export async function createKnowledgeBase(name: string) {
+  return apiPostJson<{ name: string; created_at: string; document_count: number }, { name: string }>(
+    "/api/knowledge-bases",
+    { name }
+  );
+}
+
+export async function renameKnowledgeBase(currentName: string, name: string) {
+  const response = await fetch(`/api/knowledge-bases/${encodeURIComponent(currentName)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ name })
+  });
+  if (!response.ok) {
+    return parseError(response);
+  }
+  return (await response.json()) as { name: string; created_at: string; document_count: number };
+}
+
+export async function deleteKnowledgeBase(name: string): Promise<KnowledgeBaseDeleteResponse> {
+  return apiDelete<KnowledgeBaseDeleteResponse>(`/api/knowledge-bases/${encodeURIComponent(name)}`);
+}
+
+export async function moveKnowledgeBaseDocuments(
+  sourceKnowledgeBase: string,
+  documentIds: string[],
+  targetKnowledgeBase: string
+): Promise<KnowledgeBaseMoveDocumentsResponse> {
+  return apiPostJson<
+    KnowledgeBaseMoveDocumentsResponse,
+    { document_ids: string[]; target_knowledge_base: string }
+  >(
+    `/api/knowledge-bases/${encodeURIComponent(sourceKnowledgeBase)}/documents/move`,
+    {
+      document_ids: documentIds,
+      target_knowledge_base: targetKnowledgeBase
+    }
+  );
 }
 
 export async function uploadDocument(

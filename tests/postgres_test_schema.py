@@ -19,6 +19,12 @@ SCHEMA_SQL = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS knowledge_bases(
+        name TEXT PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS ingestion_jobs(
         job_id UUID PRIMARY KEY,
         document_id UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
