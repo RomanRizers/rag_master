@@ -146,6 +146,12 @@ async def list_documents(request: Request):
     return JSONResponse(content=response.model_dump())
 
 
+@api_router.delete("/api/documents/{document_id}")
+async def delete_document(request: Request, document_id: str):
+    deleted = await run_in_threadpool(get_ingestion_service(request).delete_document, document_id)
+    return JSONResponse(content={"status": "deleted", "document": deleted})
+
+
 @api_router.post("/api/documents/upload")
 async def upload_document(
     request: Request,
@@ -224,6 +230,12 @@ async def list_chat_sessions(request: Request):
     sessions = await run_in_threadpool(get_chat_service(request).list_sessions)
     response = ChatSessionListResponse(sessions=sessions)
     return JSONResponse(content=response.model_dump())
+
+
+@api_router.delete("/api/chat/sessions/{session_id}")
+async def delete_chat_session(request: Request, session_id: str):
+    deleted = await run_in_threadpool(get_chat_service(request).delete_session, session_id)
+    return JSONResponse(content={"status": "deleted", "session": deleted})
 
 
 @api_router.get("/api/chat/sessions/{session_id}/messages")

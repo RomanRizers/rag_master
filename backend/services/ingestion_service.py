@@ -90,6 +90,12 @@ class IngestionService:
         jobs.sort(key=lambda item: item.get("started_at") or "", reverse=True)
         return jobs
 
+    def delete_document(self, document_id: str) -> dict:
+        self.document_service.get_document(document_id)
+        self.api_service.delete_document_chunks(document_id)
+        self.job_store.delete_jobs_for_document(document_id)
+        return self.document_service.delete_document(document_id)
+
     def _run_job(self, job_id: str):
         job = self.get_job(job_id)
         if job["status"] != "running":

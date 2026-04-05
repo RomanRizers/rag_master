@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getDocumentIndexStats, indexDocument, listDocuments, listJobs, uploadDocument } from "../api/client";
+import { deleteDocument, getDocumentIndexStats, indexDocument, listDocuments, listJobs, uploadDocument } from "../api/client";
 import type { DocumentItem, JobItem } from "../types";
 import { appErrorCopy } from "../utils/appError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -86,6 +86,19 @@ export function DocumentsPage() {
     }
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: deleteDocument,
+    onSuccess: (_, documentId) => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      setStatsByDocument((current) => {
+        const next = { ...current };
+        delete next[documentId];
+        return next;
+      });
+    }
+  });
+
   const documents = documentsQuery.data?.documents ?? [];
   const jobs = jobsQuery.data?.jobs ?? [];
 
@@ -161,9 +174,21 @@ export function DocumentsPage() {
           </button>
         </form>
 
-        {(uploadMutation.isError || documentsQuery.isError || indexMutation.isError || statsMutation.isError) && (
+        {(
+          uploadMutation.isError ||
+          documentsQuery.isError ||
+          indexMutation.isError ||
+          statsMutation.isError ||
+          deleteMutation.isError
+        ) && (
           <ErrorBanner
-            error={uploadMutation.error ?? documentsQuery.error ?? indexMutation.error ?? statsMutation.error}
+            error={
+              uploadMutation.error ??
+              documentsQuery.error ??
+              indexMutation.error ??
+              statsMutation.error ??
+              deleteMutation.error
+            }
             copy={appErrorCopy.ru}
             className="inline-error"
           />
@@ -214,10 +239,18 @@ export function DocumentsPage() {
                         <button
                           type="button"
                           className="ghost-action"
-                          disabled={statsMutation.isPending}
+                          disabled={statsMutation.isPending || deleteMutation.isPending}
                           onClick={() => statsMutation.mutate(document.document_id)}
                         >
                           Обновить stats
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-action"
+                          disabled={deleteMutation.isPending || hasRunning}
+                          onClick={() => deleteMutation.mutate(document.document_id)}
+                        >
+                          Удалить
                         </button>
                       </div>
                     </td>

@@ -72,6 +72,14 @@ class PostgresDocumentStore(DocumentStore):
             )
         return self.get_document(document_id)
 
+    def delete_document(self, document_id: str) -> dict | None:
+        current = self.get_document(document_id)
+        if current is None:
+            return None
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute("DELETE FROM documents WHERE document_id = %s::uuid", (document_id,))
+        return current
+
     def close(self):
         with self._lock:
             self._conn.close()

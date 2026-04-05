@@ -10,6 +10,7 @@ from backend.services.document_service import DocumentService
 class _FakeIngestionService:
     def __init__(self):
         self.jobs = {}
+        self.deleted_document_ids = []
 
     def start_indexing(self, document_id: str):
         job = {
@@ -53,6 +54,24 @@ class _FakeIngestionService:
             "existing_documents_count": 3,
             "orphan_document_ids": ["orphan-1"],
             "deleted_documents_count": 0 if dry_run else 1,
+        }
+
+    def delete_document(self, document_id: str):
+        self.deleted_document_ids.append(document_id)
+        self.jobs = {
+            job_id: job
+            for job_id, job in self.jobs.items()
+            if job.get("document_id") != document_id
+        }
+        return {
+            "document_id": document_id,
+            "file_name": "sample.txt",
+            "mime_type": "text/plain",
+            "size_bytes": 11,
+            "status": "uploaded",
+            "source_name": "manual",
+            "tags": ["tag-a", "tag-b"],
+            "created_at": "2026-04-05T00:00:00+00:00",
         }
 
 
@@ -184,6 +203,25 @@ class DocumentIngestionApiTestCase(unittest.TestCase):
         self.assertEqual(payload["document_id"], document_id)
         self.assertEqual(payload["chunks_count"], 3)
         self.assertEqual(payload["latest_job"]["job_id"], "job-1")
+
+    @patch("backend.api.routes.get_document_service")
+    @patch("backend.api.routes.get_ingestion_service")
+    def test_delete_document_endpoint(self, get_ingestion_service_mock, get_document_service_mock):
+        get_document_service_mock.return_value = self.document_service
+        get_ingestion_service_mock.return_value = self.ingestion_service
+
+        upload_response = self.client.post(
+            "/api/documents/upload",
+            files={"file": ("sample.txt", b"hello world", "text/plain")},
+        )
+        document_id = upload_response.json()["document_id"]
+
+        response = self.client.delete(f"/api/documents/{document_id}")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "deleted")
+        self.assertEqual(payload["document"]["document_id"], document_id)
+        self.assertEqual(self.ingestion_service.deleted_document_ids, [document_id])
 
     @patch("backend.api.routes.get_document_service")
     @patch("backend.api.routes.get_ingestion_service")

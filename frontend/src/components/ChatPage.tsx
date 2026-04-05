@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ApiRequestError,
   createChatSession,
+  deleteChatSession,
   getChatMessages,
   listChatSessions,
   sendChatMessage,
@@ -53,6 +54,21 @@ export function ChatPage() {
     onSuccess: (payload) => {
       setActiveSessionId(payload.session_id);
       queryClient.invalidateQueries({ queryKey: ["chat-sessions"] });
+    }
+  });
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: deleteChatSession,
+    onSuccess: async (_, sessionId) => {
+      const sessions = sessionsQuery.data?.sessions ?? [];
+      if (activeSessionId === sessionId) {
+        const nextSession = sessions.find((session) => session.session_id !== sessionId);
+        setActiveSessionId(nextSession?.session_id ?? "");
+      }
+      setStreamText("");
+      setStreamCitations([]);
+      await queryClient.invalidateQueries({ queryKey: ["chat-sessions"] });
+      await queryClient.invalidateQueries({ queryKey: ["chat-messages"] });
     }
   });
 
@@ -142,17 +158,26 @@ export function ChatPage() {
         </button>
         <div className="session-list">
           {(sessionsQuery.data?.sessions ?? []).map((session) => (
-            <button
+            <div
               key={session.session_id}
-              type="button"
               className={`session-item ${activeSessionId === session.session_id ? "active" : ""}`}
-              onClick={() => setActiveSessionId(session.session_id)}
             >
-              <span className="session-kicker">Session</span>
-              <strong>{session.session_id.slice(0, 8)}</strong>
-              <span>{session.message_count} msg</span>
-              <span>{formatIso(session.last_message_at ?? session.created_at)}</span>
-            </button>
+              <button type="button" className="session-item-main" onClick={() => setActiveSessionId(session.session_id)}>
+                <span className="session-kicker">Session</span>
+                <strong>{session.session_id.slice(0, 8)}</strong>
+                <span>{session.message_count} msg</span>
+                <span>{formatIso(session.last_message_at ?? session.created_at)}</span>
+              </button>
+              <button
+                type="button"
+                className="session-delete-button"
+                aria-label={`Удалить сессию ${session.session_id.slice(0, 8)}`}
+                disabled={sendMutation.isPending || deleteSessionMutation.isPending}
+                onClick={() => deleteSessionMutation.mutate(session.session_id)}
+              >
+                Удалить
+              </button>
+            </div>
           ))}
         </div>
       </aside>
@@ -166,11 +191,33 @@ export function ChatPage() {
           <span className="session-badge">
             {activeSessionId ? `session ${activeSessionId.slice(0, 8)}` : "сначала создайте сессию"}
           </span>
+          {activeSessionId && (
+            <button
+              type="button"
+              className="danger-action"
+              disabled={sendMutation.isPending || deleteSessionMutation.isPending}
+              onClick={() => deleteSessionMutation.mutate(activeSessionId)}
+            >
+              Удалить чат
+            </button>
+          )}
         </div>
 
-        {(sendMutation.isError || messagesQuery.isError || sessionsQuery.isError || createSessionMutation.isError) && (
+        {(
+          sendMutation.isError ||
+          messagesQuery.isError ||
+          sessionsQuery.isError ||
+          createSessionMutation.isError ||
+          deleteSessionMutation.isError
+        ) && (
           <ErrorBanner
-            error={sendMutation.error ?? messagesQuery.error ?? sessionsQuery.error ?? createSessionMutation.error}
+            error={
+              sendMutation.error ??
+              messagesQuery.error ??
+              sessionsQuery.error ??
+              createSessionMutation.error ??
+              deleteSessionMutation.error
+            }
             copy={appErrorCopy.ru}
             className="inline-error"
           />

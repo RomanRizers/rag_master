@@ -1,4 +1,4 @@
-from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchAny, MatchValue
+from qdrant_client.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, PointStruct, VectorParams
 import qdrant_client
 from backend.core.config import Config
 from backend.core.exceptions import StorageError
@@ -93,6 +93,7 @@ class QdrantService:
         )
 
         try:
+            self._ensure_collection(vector_size=len(content_vector))
             self.client.upsert(
                 collection_name=self.collection_name,
                 points=[point]
@@ -103,6 +104,9 @@ class QdrantService:
 
     def delete_document_chunks(self, document_id: str):
         logger.info("qdrant_delete_document_chunks_started", document_id=document_id)
+        if not self._collection_exists():
+            logger.info("qdrant_delete_document_chunks_skipped_missing_collection", document_id=document_id)
+            return
         try:
             self.client.delete(
                 collection_name=self.collection_name,
@@ -122,6 +126,9 @@ class QdrantService:
 
     def count_document_chunks(self, document_id: str) -> int:
         logger.info("qdrant_count_document_chunks_started", document_id=document_id)
+        if not self._collection_exists():
+            logger.info("qdrant_count_document_chunks_missing_collection", document_id=document_id, chunks_count=0)
+            return 0
         try:
             response = self.client.count(
                 collection_name=self.collection_name,
@@ -145,6 +152,9 @@ class QdrantService:
         logger.info("qdrant_list_indexed_document_ids_started", batch_size=batch_size)
         if batch_size < 1:
             batch_size = 1
+        if not self._collection_exists():
+            logger.info("qdrant_list_indexed_document_ids_missing_collection", documents_count=0)
+            return []
 
         ids: set[str] = set()
         offset = None
@@ -173,3 +183,24 @@ class QdrantService:
         result = sorted(ids)
         logger.info("qdrant_list_indexed_document_ids_finished", documents_count=len(result))
         return result
+
+    def _ensure_collection(self, vector_size: int):
+        if self._collection_exists():
+            return
+        try:
+            self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(size=int(vector_size), distance=Distance.COSINE),
+            )
+        except Exception as error:
+            raise StorageError(message="Qdrant collection create failed", details={"reason": str(error)}) from error
+        logger.info("qdrant_collection_created", collection_name=self.collection_name, vector_size=int(vector_size))
+
+    def _collection_exists(self) -> bool:
+        try:
+            if hasattr(self.client, "collection_exists"):
+                return bool(self.client.collection_exists(self.collection_name))
+            self.client.get_collection(self.collection_name)
+            return True
+        except Exception:
+            return False

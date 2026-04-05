@@ -38,3 +38,10 @@ class InMemoryJobStore(JobStore):
                     job["started_at"] = job.get("started_at") or started_at
                     return dict(job)
         return None
+
+    def delete_jobs_for_document(self, document_id: str) -> int:
+        with self._lock:
+            to_delete = [job_id for job_id, job in self._jobs.items() if job.get("document_id") == document_id]
+            for job_id in to_delete:
+                self._jobs.pop(job_id, None)
+            return len(to_delete)
