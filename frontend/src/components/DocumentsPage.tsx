@@ -131,6 +131,14 @@ export function DocumentsPage() {
   }, [jobs]);
 
   const recentJobs = useMemo(() => jobs.slice(0, 10), [jobs]);
+  const indexedDocumentsCount = useMemo(
+    () => documents.filter((item) => item.status === "indexed").length,
+    [documents]
+  );
+  const activeJobsCount = useMemo(
+    () => jobs.filter((item) => item.status === "queued" || item.status === "running").length,
+    [jobs]
+  );
 
   function submitUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -153,62 +161,84 @@ export function DocumentsPage() {
   const knowledgeBases = knowledgeBasesQuery.data?.knowledge_bases ?? [];
 
   return (
-    <div className="workspace-grid">
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Documents</h2>
-          <p>Загрузка и индексация файлов в RAG-пайплайн.</p>
-        </div>
+    <div className="documents-workspace">
+      <section className="documents-main">
+        <section className="documents-hero panel">
+          <div className="documents-hero-copy">
+            <div className="panel-head">
+              <h2>Documents</h2>
+              <p>Загрузка, распределение по базам знаний и контроль индексации.</p>
+            </div>
+            <div className="documents-kpi-grid">
+              <article className="documents-kpi-card">
+                <span>Всего документов</span>
+                <strong>{documents.length}</strong>
+              </article>
+              <article className="documents-kpi-card">
+                <span>Индексировано</span>
+                <strong>{indexedDocumentsCount}</strong>
+              </article>
+              <article className="documents-kpi-card">
+                <span>Активные jobs</span>
+                <strong>{activeJobsCount}</strong>
+              </article>
+              <article className="documents-kpi-card">
+                <span>Баз знаний</span>
+                <strong>{knowledgeBases.length}</strong>
+              </article>
+            </div>
+          </div>
 
-        <form className="upload-form" onSubmit={submitUpload}>
-          <label>
-            <span>Файл</span>
-            <input
-              type="file"
-              accept=".txt,.pdf,.docx"
-              onChange={(event) => {
-                const selected = event.target.files?.[0] ?? null;
-                setFile(selected);
-              }}
-            />
-          </label>
-          <label>
-            <span>Source name</span>
-            <input
-              type="text"
-              value={sourceName}
-              placeholder="Например: HR handbook"
-              onChange={(event) => setSourceName(event.target.value)}
-            />
-          </label>
-          <label>
-            <span>Теги (через запятую)</span>
-            <input
-              type="text"
-              value={tagsText}
-              placeholder="finance, legal"
-              onChange={(event) => setTagsText(event.target.value)}
-            />
-          </label>
-          <label>
-            <span>База знаний</span>
-            <input
-              type="text"
-              list="knowledge-base-options"
-              value={knowledgeBase}
-              placeholder="Например: policies"
-              onChange={(event) => setKnowledgeBase(event.target.value)}
-            />
-            <datalist id="knowledge-base-options">
-              {knowledgeBases.map((item) => (
-                <option key={item.name} value={item.name} />
-              ))}
-            </datalist>
-          </label>
-          <button className="primary-action" type="submit" disabled={!file || uploadMutation.isPending}>
-            {uploadMutation.isPending ? "Загрузка..." : "Загрузить"}
-          </button>
-        </form>
+          <form className="upload-form documents-upload-card" onSubmit={submitUpload}>
+            <label>
+              <span>Файл</span>
+              <input
+                type="file"
+                accept=".txt,.pdf,.docx"
+                onChange={(event) => {
+                  const selected = event.target.files?.[0] ?? null;
+                  setFile(selected);
+                }}
+              />
+            </label>
+            <label>
+              <span>Source name</span>
+              <input
+                type="text"
+                value={sourceName}
+                placeholder="Например: HR handbook"
+                onChange={(event) => setSourceName(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Теги (через запятую)</span>
+              <input
+                type="text"
+                value={tagsText}
+                placeholder="finance, legal"
+                onChange={(event) => setTagsText(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>База знаний</span>
+              <input
+                type="text"
+                list="knowledge-base-options"
+                value={knowledgeBase}
+                placeholder="Например: policies"
+                onChange={(event) => setKnowledgeBase(event.target.value)}
+              />
+              <datalist id="knowledge-base-options">
+                {knowledgeBases.map((item) => (
+                  <option key={item.name} value={item.name} />
+                ))}
+              </datalist>
+            </label>
+            <button className="primary-action documents-upload-button" type="submit" disabled={!file || uploadMutation.isPending}>
+              {uploadMutation.isPending ? "Загрузка..." : "Загрузить в базу"}
+            </button>
+          </form>
+        </section>
 
         {(
           uploadMutation.isError ||
@@ -230,102 +260,121 @@ export function DocumentsPage() {
           />
         )}
 
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Файл</th>
-                <th>Размер</th>
-                <th>База знаний</th>
-                <th>Теги</th>
-                <th>Статус</th>
-                <th>Chunks</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {documents.length === 0 && (
-                <tr>
-                  <td colSpan={7}>Документы пока не загружены.</td>
-                </tr>
-              )}
-              {documents.map((document: DocumentItem) => {
-                const stats = statsByDocument[document.document_id];
-                const docJobs = jobsByDocument.get(document.document_id) ?? [];
-                const hasRunning = docJobs.some((job) => job.status === "queued" || job.status === "running");
-                return (
-                  <tr key={document.document_id}>
-                    <td>
+        <section className="panel documents-library-panel">
+          <div className="panel-head">
+            <h2>Library</h2>
+            <p>Карточки документов с действиями по месту.</p>
+          </div>
+          {documents.length === 0 && <p className="muted">Документы пока не загружены.</p>}
+          <div className="documents-card-grid">
+            {documents.map((document: DocumentItem) => {
+              const stats = statsByDocument[document.document_id];
+              const docJobs = jobsByDocument.get(document.document_id) ?? [];
+              const hasRunning = docJobs.some((job) => job.status === "queued" || job.status === "running");
+              return (
+                <article key={document.document_id} className="document-card">
+                  <div className="document-card-top">
+                    <div>
                       <strong>{document.file_name}</strong>
-                      <div className="muted">{formatIso(document.created_at)}</div>
-                    </td>
-                    <td>{formatBytes(document.size_bytes)}</td>
-                    <td>{document.knowledge_base}</td>
-                    <td>{document.tags.length ? document.tags.join(", ") : "—"}</td>
-                    <td>{document.status}</td>
-                    <td>{stats?.chunks_count ?? "—"}</td>
-                    <td>
-                      <div className="table-actions">
-                        <button
-                          type="button"
-                          className="secondary-action"
-                          disabled={indexMutation.isPending || hasRunning}
-                          onClick={() => indexMutation.mutate(document.document_id)}
-                        >
-                          {hasRunning ? "В процессе..." : "Индексировать"}
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-action"
-                          disabled={statsMutation.isPending || deleteMutation.isPending}
-                          onClick={() => statsMutation.mutate(document.document_id)}
-                        >
-                          Обновить stats
-                        </button>
-                        <button
-                          type="button"
-                          className="danger-action"
-                          disabled={deleteMutation.isPending || hasRunning}
-                          onClick={() => deleteMutation.mutate(document.document_id)}
-                        >
-                          Удалить
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      <p className="muted">{formatIso(document.created_at)}</p>
+                    </div>
+                    <span className={`document-status-badge status-${document.status}`}>{document.status}</span>
+                  </div>
+                  <div className="document-meta-grid">
+                    <div>
+                      <span>Размер</span>
+                      <strong>{formatBytes(document.size_bytes)}</strong>
+                    </div>
+                    <div>
+                      <span>База знаний</span>
+                      <strong>{document.knowledge_base}</strong>
+                    </div>
+                    <div>
+                      <span>Chunks</span>
+                      <strong>{stats?.chunks_count ?? "—"}</strong>
+                    </div>
+                    <div>
+                      <span>Теги</span>
+                      <strong>{document.tags.length ? document.tags.join(", ") : "—"}</strong>
+                    </div>
+                  </div>
+                  <div className="document-card-actions">
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      disabled={indexMutation.isPending || hasRunning}
+                      onClick={() => indexMutation.mutate(document.document_id)}
+                    >
+                      {hasRunning ? "В процессе..." : "Индексировать"}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-action"
+                      disabled={statsMutation.isPending || deleteMutation.isPending}
+                      onClick={() => statsMutation.mutate(document.document_id)}
+                    >
+                      Обновить stats
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-action"
+                      disabled={deleteMutation.isPending || hasRunning}
+                      onClick={() => deleteMutation.mutate(document.document_id)}
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
       </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Jobs</h2>
-          <p>Последние задачи индексации.</p>
-        </div>
-        <div className="jobs-list">
-          {recentJobs.length === 0 && <p className="muted">Пока нет jobs.</p>}
-          {recentJobs.map((job) => (
-            <article className="job-card" key={job.job_id}>
-              <div className="job-head">
-                <strong>{job.status}</strong>
-                <span>{job.progress}%</span>
-              </div>
-              <div className="job-body">
-                <p>job: {job.job_id}</p>
-                <p>document: {job.document_id}</p>
-                <p>attempt: {job.attempt}</p>
-                {job.error_message && <p className="inline-error">{job.error_message}</p>}
-                <p className="muted">
-                  {formatIso(job.started_at)} → {formatIso(job.finished_at)}
-                </p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      <aside className="documents-side">
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Knowledge Bases</h2>
+            <p>Распределение библиотеки по доменам.</p>
+          </div>
+          <div className="knowledge-base-stack">
+            {knowledgeBases.length === 0 && <p className="muted">Пока нет баз знаний.</p>}
+            {knowledgeBases.map((item) => (
+              <article key={item.name} className="knowledge-base-card">
+                <strong>{item.name}</strong>
+                <span>{item.document_count} документов</span>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Jobs</h2>
+            <p>Последние задачи индексации.</p>
+          </div>
+          <div className="jobs-list jobs-timeline">
+            {recentJobs.length === 0 && <p className="muted">Пока нет jobs.</p>}
+            {recentJobs.map((job) => (
+              <article className="job-card job-card-strong" key={job.job_id}>
+                <div className="job-head">
+                  <strong>{job.status}</strong>
+                  <span>{job.progress}%</span>
+                </div>
+                <div className="job-body">
+                  <p>job: {job.job_id}</p>
+                  <p>document: {job.document_id}</p>
+                  <p>attempt: {job.attempt}</p>
+                  {job.error_message && <p className="inline-error">{job.error_message}</p>}
+                  <p className="muted">
+                    {formatIso(job.started_at)} → {formatIso(job.finished_at)}
+                  </p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </aside>
     </div>
   );
 }
