@@ -154,6 +154,33 @@ class QdrantService:
         logger.info("qdrant_count_document_chunks_finished", document_id=document_id, chunks_count=count)
         return count
 
+    def update_document_knowledge_base(self, document_id: str, knowledge_base: str):
+        logger.info("qdrant_update_document_knowledge_base_started", document_id=document_id, knowledge_base=knowledge_base)
+        if not self._collection_exists():
+            logger.info(
+                "qdrant_update_document_knowledge_base_skipped_missing_collection",
+                document_id=document_id,
+                knowledge_base=knowledge_base,
+            )
+            return
+        try:
+            self.client.set_payload(
+                collection_name=self.collection_name,
+                payload={"knowledge_base": knowledge_base},
+                points=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=document_id),
+                        )
+                    ]
+                ),
+                wait=True,
+            )
+        except Exception as error:
+            raise StorageError(message="Qdrant payload update failed", details={"reason": str(error)}) from error
+        logger.info("qdrant_update_document_knowledge_base_finished", document_id=document_id, knowledge_base=knowledge_base)
+
     def list_indexed_document_ids(self, batch_size: int = 256) -> list[str]:
         logger.info("qdrant_list_indexed_document_ids_started", batch_size=batch_size)
         if batch_size < 1:

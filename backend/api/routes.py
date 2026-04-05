@@ -1,7 +1,8 @@
 import json
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from backend.api.dependencies import ensure_admin_api_key, ensure_json_content_type
@@ -13,7 +14,14 @@ from backend.api.schemas import (
     ChatSessionMessagesResponse,
     DocumentIndexResponse,
     DocumentIndexStatsResponse,
+    DocumentListItem,
+    KnowledgeBaseCreateRequest,
+    KnowledgeBaseDeleteResponse,
+    KnowledgeBaseListItem,
     KnowledgeBaseListResponse,
+    KnowledgeBaseMoveDocumentsRequest,
+    KnowledgeBaseMoveDocumentsResponse,
+    KnowledgeBaseRenameRequest,
     DocumentListResponse,
     DocumentUploadResponse,
     IndexingRequest,
@@ -155,10 +163,75 @@ async def list_knowledge_bases(request: Request):
     return JSONResponse(content=response.model_dump())
 
 
+@api_router.post("/api/knowledge-bases")
+async def create_knowledge_base(request: Request, payload: KnowledgeBaseCreateRequest, _: None = Depends(ensure_json_content_type)):
+    item = await run_in_threadpool(get_document_service(request).create_knowledge_base, payload.name)
+    response = KnowledgeBaseListItem.model_validate(item)
+    return JSONResponse(content=response.model_dump(), status_code=201)
+
+
+@api_router.patch("/api/knowledge-bases/{knowledge_base_name}")
+async def rename_knowledge_base(
+    request: Request,
+    knowledge_base_name: str,
+    payload: KnowledgeBaseRenameRequest,
+    _: None = Depends(ensure_json_content_type),
+):
+    item = await run_in_threadpool(get_ingestion_service(request).rename_knowledge_base, knowledge_base_name, payload.name)
+    response = KnowledgeBaseListItem.model_validate(item)
+    return JSONResponse(content=response.model_dump())
+
+
+@api_router.delete("/api/knowledge-bases/{knowledge_base_name}")
+async def delete_knowledge_base(request: Request, knowledge_base_name: str):
+    item = await run_in_threadpool(get_ingestion_service(request).delete_knowledge_base, knowledge_base_name)
+    response = KnowledgeBaseDeleteResponse(status="deleted", knowledge_base=KnowledgeBaseListItem.model_validate(item))
+    return JSONResponse(content=response.model_dump())
+
+
+@api_router.post("/api/knowledge-bases/{knowledge_base_name}/documents/move")
+async def move_knowledge_base_documents(
+    request: Request,
+    knowledge_base_name: str,
+    payload: KnowledgeBaseMoveDocumentsRequest,
+    _: None = Depends(ensure_json_content_type),
+):
+    source_documents = [
+        item for item in get_document_service(request).list_documents()
+        if item.get("knowledge_base") == knowledge_base_name and item.get("document_id") in set(payload.document_ids)
+    ]
+    moved = await run_in_threadpool(
+        get_ingestion_service(request).move_documents_to_knowledge_base,
+        [item["document_id"] for item in source_documents],
+        payload.target_knowledge_base,
+    )
+    response = KnowledgeBaseMoveDocumentsResponse(
+        status="moved",
+        target_knowledge_base=payload.target_knowledge_base,
+        moved_documents=[DocumentListItem.model_validate(item) for item in moved],
+    )
+    return JSONResponse(content=response.model_dump())
+
+
 @api_router.delete("/api/documents/{document_id}")
 async def delete_document(request: Request, document_id: str):
     deleted = await run_in_threadpool(get_ingestion_service(request).delete_document, document_id)
     return JSONResponse(content={"status": "deleted", "document": deleted})
+
+
+@api_router.get("/api/documents/{document_id}/content")
+async def get_document_content(request: Request, document_id: str):
+    document = await run_in_threadpool(get_document_service(request).get_document, document_id)
+    content = await run_in_threadpool(get_document_service(request).read_content, document_id)
+    file_name = quote(document.file_name)
+    return Response(
+        content=content,
+        media_type=document.mime_type,
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{file_name}",
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @api_router.post("/api/documents/upload")

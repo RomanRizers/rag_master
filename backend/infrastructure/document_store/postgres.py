@@ -65,6 +65,46 @@ class PostgresDocumentStore(DocumentStore):
             rows = cursor.fetchall()
         return [_row_to_document(row) for row in rows]
 
+    def create_knowledge_base(self, knowledge_base: dict) -> dict:
+        query = """
+            INSERT INTO knowledge_bases(name, created_at)
+            VALUES (%s, %s::timestamptz)
+            ON CONFLICT (name) DO UPDATE
+            SET created_at = LEAST(knowledge_bases.created_at, EXCLUDED.created_at)
+            RETURNING name, created_at
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query, (knowledge_base["name"], knowledge_base["created_at"]))
+            row = cursor.fetchone()
+        return _row_to_knowledge_base(row) if row is not None else dict(knowledge_base)
+
+    def list_knowledge_bases(self) -> list[dict]:
+        query = """
+            SELECT name, created_at
+            FROM knowledge_bases
+            ORDER BY created_at DESC, name ASC
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return [_row_to_knowledge_base(row) for row in rows]
+
+    def update_document_knowledge_base(self, document_id: str, knowledge_base: str) -> dict | None:
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(
+                "UPDATE documents SET knowledge_base = %s WHERE document_id = %s::uuid",
+                (knowledge_base, document_id),
+            )
+        return self.get_document(document_id)
+
+    def delete_knowledge_base(self, name: str) -> dict | None:
+        current = next((item for item in self.list_knowledge_bases() if item["name"] == name), None)
+        if current is None:
+            return None
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute("DELETE FROM knowledge_bases WHERE name = %s", (name,))
+        return current
+
     def set_status(self, document_id: str, status: str) -> dict | None:
         with self._lock, self._conn.cursor() as cursor:
             cursor.execute(
@@ -98,6 +138,13 @@ def _row_to_document(row: tuple) -> dict:
         "knowledge_base": row[7] or "default",
         "created_at": _to_iso(row[8]),
         "object_key": row[9],
+    }
+
+
+def _row_to_knowledge_base(row: tuple) -> dict:
+    return {
+        "name": row[0],
+        "created_at": _to_iso(row[1]),
     }
 
 

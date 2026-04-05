@@ -120,6 +120,14 @@ class ApiServiceTestCase(unittest.TestCase):
         with self.assertRaises(StorageError):
             service.list_indexed_document_ids()
 
+    def test_update_document_knowledge_base_calls_qdrant(self):
+        mock_qdrant = Mock()
+        service = ApiService(qdrant_service=mock_qdrant, vectorizer=Mock())
+
+        service.update_document_knowledge_base("d1", "kb-2")
+
+        mock_qdrant.update_document_knowledge_base.assert_called_once_with("d1", "kb-2")
+
 
 if __name__ == "__main__":
     unittest.main()

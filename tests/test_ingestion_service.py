@@ -59,6 +59,10 @@ class _ApiServiceCapturePayload:
     def list_indexed_document_ids(self):
         return ["known-document", "orphan-document"]
 
+    def update_document_knowledge_base(self, document_id: str, knowledge_base: str):
+        self.last_deleted_document_id = f"{document_id}:{knowledge_base}"
+        return {"status": "success"}
+
 
 class IngestionServiceTestCase(unittest.TestCase):
     def test_start_indexing_is_idempotent_for_active_job(self):
@@ -212,6 +216,33 @@ class IngestionServiceTestCase(unittest.TestCase):
             self.assertEqual(result["orphan_document_ids"], ["orphan-id"])
             self.assertEqual(result["deleted_documents_count"], 1)
             self.assertEqual(deleted_ids, ["orphan-id"])
+
+    def test_move_documents_to_knowledge_base_updates_qdrant_payload(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage = LocalFileStorageAdapter(temp_dir)
+            documents = DocumentService(storage=storage)
+            first = documents.create_document("doc-a.txt", "text/plain", b"hello", knowledge_base="kb-a")
+            second = documents.create_document("doc-b.txt", "text/plain", b"world", knowledge_base="kb-a")
+            api_service = _ApiServiceCapturePayload()
+            ingestion = IngestionService(document_service=documents, api_service=api_service)
+
+            moved = ingestion.move_documents_to_knowledge_base(
+                [first["document_id"], second["document_id"]],
+                "kb-b",
+            )
+
+            self.assertEqual({item["knowledge_base"] for item in moved}, {"kb-b"})
+
+    def test_delete_empty_knowledge_base(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage = LocalFileStorageAdapter(temp_dir)
+            documents = DocumentService(storage=storage)
+            documents.create_knowledge_base("kb-empty")
+            ingestion = IngestionService(document_service=documents, api_service=_ApiServiceCapturePayload())
+
+            deleted = ingestion.delete_knowledge_base("kb-empty")
+
+            self.assertEqual(deleted["name"], "kb-empty")
 
 
 if __name__ == "__main__":

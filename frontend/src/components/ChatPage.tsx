@@ -13,6 +13,7 @@ import {
 } from "../api/client";
 import type { ChatCitation, ChatMessage } from "../types";
 import { appErrorCopy } from "../utils/appError";
+import { ConfirmModal } from "./ConfirmModal";
 import { ErrorBanner } from "./ErrorBanner";
 
 function formatIso(value?: string | null): string {
@@ -24,6 +25,10 @@ function formatIso(value?: string | null): string {
     return value;
   }
   return date.toLocaleString();
+}
+
+function sessionLabel(value: string): string {
+  return `session ${value.slice(0, 8)}`;
 }
 
 export function ChatPage() {
@@ -38,6 +43,7 @@ export function ChatPage() {
   const [streaming, setStreaming] = useState(true);
   const [streamText, setStreamText] = useState("");
   const [streamCitations, setStreamCitations] = useState<ChatCitation[]>([]);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   const sessionsQuery = useQuery({
     queryKey: ["chat-sessions"],
@@ -73,6 +79,7 @@ export function ChatPage() {
         const nextSession = sessions.find((session) => session.session_id !== sessionId);
         setActiveSessionId(nextSession?.session_id ?? "");
       }
+      setSessionToDelete(null);
       setStreamText("");
       setStreamCitations([]);
       await queryClient.invalidateQueries({ queryKey: ["chat-sessions"] });
@@ -146,6 +153,22 @@ export function ChatPage() {
     return [...messages, placeholder];
   }, [messages, sendMutation.isPending, streamCitations, streamText, streaming]);
 
+  const activeSession = useMemo(
+    () => (sessionsQuery.data?.sessions ?? []).find((session) => session.session_id === activeSessionId) ?? null,
+    [activeSessionId, sessionsQuery.data?.sessions]
+  );
+
+  const activeMessageCount = activeSession?.message_count ?? messages.length;
+
+  function openCitationDocument(citation: ChatCitation, page?: number | null) {
+    if (!citation.document_id) {
+      return;
+    }
+    const baseUrl = `/api/documents/${encodeURIComponent(citation.document_id)}/content`;
+    const targetUrl = typeof page === "number" ? `${baseUrl}#page=${page}` : baseUrl;
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  }
+
   function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     sendMutation.mutate();
@@ -162,8 +185,8 @@ export function ChatPage() {
       <aside className="panel sessions-panel chat-sidebar">
         <div className="chat-sidebar-top">
           <div className="panel-head chat-sidebar-head">
-            <h2>Chat Sessions</h2>
-            <p>Диалоги, пресеты и быстрый контекст.</p>
+            <h2>Conversations</h2>
+            <p>Сессии, активный контекст и быстрый доступ к последним диалогам.</p>
           </div>
           <button
             className="primary-action session-create-button"
@@ -200,7 +223,7 @@ export function ChatPage() {
                 className="session-delete-button"
                 aria-label={`Удалить сессию ${session.session_id.slice(0, 8)}`}
                 disabled={sendMutation.isPending || deleteSessionMutation.isPending}
-                onClick={() => deleteSessionMutation.mutate(session.session_id)}
+                onClick={() => setSessionToDelete(session.session_id)}
               >
                 Удалить
               </button>
@@ -211,20 +234,36 @@ export function ChatPage() {
 
       <section className="panel chat-panel chat-shell">
         <div className="chat-shell-hero">
-          <div className="panel-head chat-shell-head">
-            <h2>Chat</h2>
-            <p>Полноценная рабочая лента с выбором источников и быстрым ответом.</p>
+          <div className="chat-hero-main">
+            <div className="panel-head chat-shell-head">
+              <h2>Knowledge Chat</h2>
+              <p>Сфокусированный режим вопросов по выбранным базам знаний, документам и тегам.</p>
+            </div>
+            <div className="chat-hero-metrics">
+              <article className="chat-hero-metric">
+                <span>Session</span>
+                <strong>{activeSessionId ? activeSessionId.slice(0, 8) : "—"}</strong>
+              </article>
+              <article className="chat-hero-metric">
+                <span>Messages</span>
+                <strong>{activeMessageCount}</strong>
+              </article>
+              <article className="chat-hero-metric">
+                <span>Scope</span>
+                <strong>{selectedKnowledgeBases.length > 0 ? selectedKnowledgeBases.length : "all"}</strong>
+              </article>
+            </div>
           </div>
           <div className="chat-session-meta">
             <span className="session-badge">
-              {activeSessionId ? `session ${activeSessionId.slice(0, 8)}` : "сначала создайте сессию"}
+              {activeSessionId ? sessionLabel(activeSessionId) : "сначала создайте сессию"}
             </span>
             {activeSessionId && (
               <button
                 type="button"
                 className="danger-action"
                 disabled={sendMutation.isPending || deleteSessionMutation.isPending}
-                onClick={() => deleteSessionMutation.mutate(activeSessionId)}
+                onClick={() => setSessionToDelete(activeSessionId)}
               >
                 Удалить чат
               </button>
@@ -238,6 +277,8 @@ export function ChatPage() {
                 ? `базы: ${selectedKnowledgeBases.join(", ")}`
                 : "все базы знаний"}
             </span>
+            {docNamesText.trim() && <span className="chip">docs: {docNamesText}</span>}
+            {tagsText.trim() && <span className="chip">tags: {tagsText}</span>}
           </div>
         </div>
 
@@ -264,24 +305,47 @@ export function ChatPage() {
         <div className="messages-list chat-messages-list">
           {shownMessages.length === 0 && (
             <div className="chat-empty-state">
-              <p className="muted">Выберите сессию и отправьте первое сообщение.</p>
+              <div className="chat-empty-copy">
+                <strong>Диалог ещё не начался</strong>
+                <p className="muted">Выберите сессию, зафиксируйте контекст и отправьте первый вопрос.</p>
+              </div>
             </div>
           )}
           {shownMessages.map((item) => (
             <div className={`message-row ${item.role === "user" ? "user" : "assistant"}`} key={item.id}>
               <article className={`message-card ${item.role === "user" ? "user" : "assistant"}`}>
                 <header>
-                  <strong>{item.role}</strong>
+                  <strong>{item.role === "user" ? "You" : "Assistant"}</strong>
                   <span>{formatIso(item.created_at)}</span>
                 </header>
                 <p>{item.content}</p>
                 {item.citations.length > 0 && (
-                  <ul className="citations-list">
+                  <ul className="citations-list citation-cards">
                     {item.citations.map((citation, index) => (
-                      <li key={`${item.id}-citation-${index}`}>
-                        <strong>{citation.document_name ?? "Unknown document"}</strong>
-                        {citation.page ? `, page ${citation.page}` : ""}
-                        {citation.snippet ? ` — ${citation.snippet}` : ""}
+                      <li key={`${item.id}-citation-${index}`} className="citation-card">
+                        <div className="citation-card-head">
+                          <strong>{citation.document_name ?? "Unknown document"}</strong>
+                          {citation.page ? <span className="chip">page {citation.page}</span> : <span className="chip">source</span>}
+                        </div>
+                        {citation.snippet && <p>{citation.snippet}</p>}
+                        <div className="citation-card-actions">
+                          <button
+                            type="button"
+                            className="secondary-action"
+                            disabled={!citation.document_id}
+                            onClick={() => openCitationDocument(citation)}
+                          >
+                            Открыть документ
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            disabled={!citation.document_id || typeof citation.page !== "number"}
+                            onClick={() => openCitationDocument(citation, citation.page)}
+                          >
+                            К странице
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -292,6 +356,10 @@ export function ChatPage() {
         </div>
 
         <form className="chat-controls chat-composer" onSubmit={submitMessage}>
+          <div className="chat-composer-topline">
+            <span className="chat-composer-kicker">Compose</span>
+            <p className="muted">Ответ будет ограничен выбранным контекстом и активными фильтрами.</p>
+          </div>
           <div className="chat-composer-main chat-composer-grid">
             <div className="chat-composer-column">
               <label className="chat-message-field">
@@ -372,6 +440,20 @@ export function ChatPage() {
           </div>
         </form>
       </section>
+
+      <ConfirmModal
+        open={Boolean(sessionToDelete)}
+        title="Удалить чат?"
+        description="Сессия и все сообщения будут удалены без возможности восстановления."
+        confirmLabel="Удалить чат"
+        pending={deleteSessionMutation.isPending}
+        onCancel={() => setSessionToDelete(null)}
+        onConfirm={() => {
+          if (sessionToDelete) {
+            deleteSessionMutation.mutate(sessionToDelete);
+          }
+        }}
+      />
     </div>
   );
 }

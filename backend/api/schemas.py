@@ -272,13 +272,64 @@ class DocumentListResponse(BaseModel):
     documents: list[DocumentListItem]
 
 
+class KnowledgeBaseCreateRequest(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Knowledge base name is required")
+        return value.strip()
+
+
+class KnowledgeBaseRenameRequest(KnowledgeBaseCreateRequest):
+    pass
+
+
 class KnowledgeBaseListItem(BaseModel):
     name: str
+    created_at: str
     document_count: int
 
 
 class KnowledgeBaseListResponse(BaseModel):
     knowledge_bases: list[KnowledgeBaseListItem]
+
+
+class KnowledgeBaseDeleteResponse(BaseModel):
+    status: str
+    knowledge_base: KnowledgeBaseListItem
+
+
+class KnowledgeBaseMoveDocumentsRequest(BaseModel):
+    document_ids: list[str]
+    target_knowledge_base: str
+
+    @field_validator("document_ids", mode="before")
+    @classmethod
+    def validate_document_ids(cls, value):
+        if not isinstance(value, list) or len(value) == 0:
+            raise ValueError("document_ids must be a non-empty list")
+        normalized = []
+        for item in value:
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError("document_ids must be a non-empty list")
+            normalized.append(item.strip())
+        return normalized
+
+    @field_validator("target_knowledge_base")
+    @classmethod
+    def validate_target_knowledge_base(cls, value: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("target_knowledge_base is required")
+        return value.strip()
+
+
+class KnowledgeBaseMoveDocumentsResponse(BaseModel):
+    status: str
+    target_knowledge_base: str
+    moved_documents: list[DocumentListItem]
 
 
 class SearchFilters(BaseModel):
