@@ -194,6 +194,7 @@ class IngestionService:
                     "source_uri": document.object_key,
                     "source_name": document.source_name,
                     "tags": list(document.tags),
+                    "knowledge_base": document.knowledge_base,
                 },
             }
             for chunk in chunks

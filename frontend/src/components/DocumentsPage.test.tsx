@@ -58,6 +58,7 @@ describe("DocumentsPage", () => {
           status: "indexed",
           source_name: "HR Handbook",
           tags: ["hr", "policy"],
+          knowledge_base: "policies",
           created_at: "2026-04-04T10:00:00Z"
         }
       ]
@@ -81,6 +82,7 @@ describe("DocumentsPage", () => {
     const markup = renderToStaticMarkup(<DocumentsPage />);
 
     expect(markup).toContain("handbook.pdf");
+    expect(markup).toContain("policies");
     expect(markup).toContain("hr, policy");
     expect(markup).toContain("done");
     expect(markup).toContain("100%");

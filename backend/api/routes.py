@@ -13,6 +13,7 @@ from backend.api.schemas import (
     ChatSessionMessagesResponse,
     DocumentIndexResponse,
     DocumentIndexStatsResponse,
+    KnowledgeBaseListResponse,
     DocumentListResponse,
     DocumentUploadResponse,
     IndexingRequest,
@@ -123,6 +124,7 @@ async def search(request: Request, payload: SearchRequest, _: None = Depends(ens
         payload.query,
         payload.top_k,
         payload.keywords,
+        payload.filters.model_dump(exclude_none=True) if payload.filters else None,
     )
     return JSONResponse(content=results)
 
@@ -146,6 +148,13 @@ async def list_documents(request: Request):
     return JSONResponse(content=response.model_dump())
 
 
+@api_router.get("/api/knowledge-bases")
+async def list_knowledge_bases(request: Request):
+    items = await run_in_threadpool(get_document_service(request).list_knowledge_bases)
+    response = KnowledgeBaseListResponse(knowledge_bases=items)
+    return JSONResponse(content=response.model_dump())
+
+
 @api_router.delete("/api/documents/{document_id}")
 async def delete_document(request: Request, document_id: str):
     deleted = await run_in_threadpool(get_ingestion_service(request).delete_document, document_id)
@@ -158,6 +167,7 @@ async def upload_document(
     file: UploadFile = File(...),
     source_name: str | None = Form(None),
     tags: list[str] | None = Form(None),
+    knowledge_base: str | None = Form(None),
 ):
     content = await file.read()
     if not content:
@@ -170,6 +180,7 @@ async def upload_document(
         content,
         source_name,
         tags,
+        knowledge_base,
     )
     response = DocumentUploadResponse.model_validate(document)
     return JSONResponse(content=response.model_dump(), status_code=201)

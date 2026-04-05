@@ -179,7 +179,12 @@ def _apply_search_filters(search_results: list[dict], filters: dict | None) -> l
         for item in (filters.get("tags") or [])
         if isinstance(item, str) and item.strip()
     }
-    if not document_names and not tags:
+    knowledge_bases = {
+        str(item).strip().lower()
+        for item in (filters.get("knowledge_bases") or [])
+        if isinstance(item, str) and item.strip()
+    }
+    if not document_names and not tags and not knowledge_bases:
         return search_results
 
     filtered = []
@@ -201,6 +206,11 @@ def _apply_search_filters(search_results: list[dict], filters: dict | None) -> l
                 if isinstance(tag, str) and tag.strip()
             }
             if not normalized_tags.intersection(tags):
+                continue
+
+        if knowledge_bases:
+            current_base = str(payload.get("knowledge_base") or "").strip().lower()
+            if current_base not in knowledge_bases:
                 continue
 
         filtered.append(item)

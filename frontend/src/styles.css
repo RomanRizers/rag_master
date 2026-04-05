@@ -376,6 +376,11 @@ body {
   gap: 8px;
 }
 
+.knowledge-base-filter {
+  display: grid;
+  gap: 8px;
+}
+
 .keyword-chip,
 .chip {
   border: 1px solid var(--line);

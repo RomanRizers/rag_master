@@ -5,6 +5,7 @@ import type { SearchResult } from "../types";
 type ResultCardCopy = {
   relevance: string;
   rawScore: string;
+  knowledgeBase: string;
   content: string;
   keywords: string;
   noContent: string;
@@ -42,6 +43,9 @@ export function ResultCard({
         <span className="chip">
           {text.rawScore}: {formatRawScore(result.score)}
         </span>
+        {result.payload.knowledge_base && (
+          <span className="chip">{text.knowledgeBase}: {result.payload.knowledge_base}</span>
+        )}
       </div>
 
       <p className="result-content">

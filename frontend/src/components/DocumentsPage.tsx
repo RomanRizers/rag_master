@@ -1,7 +1,15 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { deleteDocument, getDocumentIndexStats, indexDocument, listDocuments, listJobs, uploadDocument } from "../api/client";
+import {
+  deleteDocument,
+  getDocumentIndexStats,
+  indexDocument,
+  listDocuments,
+  listJobs,
+  listKnowledgeBases,
+  uploadDocument
+} from "../api/client";
 import type { DocumentItem, JobItem } from "../types";
 import { appErrorCopy } from "../utils/appError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -39,6 +47,7 @@ export function DocumentsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [sourceName, setSourceName] = useState("");
   const [tagsText, setTagsText] = useState("");
+  const [knowledgeBase, setKnowledgeBase] = useState("default");
   const [statsByDocument, setStatsByDocument] = useState<StatsByDocument>({});
 
   const documentsQuery = useQuery({
@@ -53,15 +62,23 @@ export function DocumentsPage() {
     refetchInterval: 4000
   });
 
+  const knowledgeBasesQuery = useQuery({
+    queryKey: ["knowledge-bases"],
+    queryFn: listKnowledgeBases,
+    refetchInterval: 7000
+  });
+
   const uploadMutation = useMutation({
-    mutationFn: (payload: { file: File; sourceName: string; tags: string[] }) =>
-      uploadDocument(payload.file, payload.sourceName, payload.tags),
+    mutationFn: (payload: { file: File; sourceName: string; tags: string[]; knowledgeBase: string }) =>
+      uploadDocument(payload.file, payload.sourceName, payload.tags, payload.knowledgeBase),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
       setFile(null);
       setSourceName("");
       setTagsText("");
+      setKnowledgeBase("default");
     }
   });
 
@@ -91,6 +108,7 @@ export function DocumentsPage() {
     onSuccess: (_, documentId) => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
       setStatsByDocument((current) => {
         const next = { ...current };
         delete next[documentId];
@@ -127,9 +145,12 @@ export function DocumentsPage() {
     uploadMutation.mutate({
       file,
       sourceName,
-      tags
+      tags,
+      knowledgeBase
     });
   }
+
+  const knowledgeBases = knowledgeBasesQuery.data?.knowledge_bases ?? [];
 
   return (
     <div className="workspace-grid">
@@ -169,6 +190,21 @@ export function DocumentsPage() {
               onChange={(event) => setTagsText(event.target.value)}
             />
           </label>
+          <label>
+            <span>База знаний</span>
+            <input
+              type="text"
+              list="knowledge-base-options"
+              value={knowledgeBase}
+              placeholder="Например: policies"
+              onChange={(event) => setKnowledgeBase(event.target.value)}
+            />
+            <datalist id="knowledge-base-options">
+              {knowledgeBases.map((item) => (
+                <option key={item.name} value={item.name} />
+              ))}
+            </datalist>
+          </label>
           <button className="primary-action" type="submit" disabled={!file || uploadMutation.isPending}>
             {uploadMutation.isPending ? "Загрузка..." : "Загрузить"}
           </button>
@@ -200,6 +236,7 @@ export function DocumentsPage() {
               <tr>
                 <th>Файл</th>
                 <th>Размер</th>
+                <th>База знаний</th>
                 <th>Теги</th>
                 <th>Статус</th>
                 <th>Chunks</th>
@@ -209,7 +246,7 @@ export function DocumentsPage() {
             <tbody>
               {documents.length === 0 && (
                 <tr>
-                  <td colSpan={6}>Документы пока не загружены.</td>
+                  <td colSpan={7}>Документы пока не загружены.</td>
                 </tr>
               )}
               {documents.map((document: DocumentItem) => {
@@ -223,6 +260,7 @@ export function DocumentsPage() {
                       <div className="muted">{formatIso(document.created_at)}</div>
                     </td>
                     <td>{formatBytes(document.size_bytes)}</td>
+                    <td>{document.knowledge_base}</td>
                     <td>{document.tags.length ? document.tags.join(", ") : "—"}</td>
                     <td>{document.status}</td>
                     <td>{stats?.chunks_count ?? "—"}</td>

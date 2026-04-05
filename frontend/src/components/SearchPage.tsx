@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { ApiRequestError, searchParagraphs } from "../api/client";
+import { ApiRequestError, listKnowledgeBases, searchParagraphs } from "../api/client";
 import { STORAGE_LANG_KEY, copy, type Language } from "../i18n";
 import { getSystemPrefersDark, parseThemeMode, resolveTheme, STORAGE_THEME_KEY, type ThemeMode } from "../theme";
 import { appErrorCopy } from "../utils/appError";
@@ -44,12 +44,19 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
   const [topK, setTopK] = useState(5);
   const [sortMode, setSortMode] = useState<SortMode>("relevance_desc");
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
+  const [selectedKnowledgeBases, setSelectedKnowledgeBases] = useState<string[]>([]);
   const [copied, setCopied] = useState<CopiedState>({});
 
   const text = copy[language];
 
   const mutation = useMutation({
     mutationFn: searchParagraphs
+  });
+
+  const knowledgeBasesQuery = useQuery({
+    queryKey: ["knowledge-bases"],
+    queryFn: listKnowledgeBases,
+    refetchInterval: 7000
   });
 
   const allKeywords = useMemo(
@@ -105,12 +112,21 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
 
     mutation.mutate({
       query: trimmed,
-      top_k: topK
+      top_k: topK,
+      filters: {
+        knowledge_bases: selectedKnowledgeBases
+      }
     });
   }
 
   function toggleKeyword(value: string) {
     setSelectedKeywords((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
+    );
+  }
+
+  function toggleKnowledgeBase(value: string) {
+    setSelectedKnowledgeBases((current) =>
       current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
     );
   }
@@ -162,6 +178,29 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
         loading={mutation.isPending}
         text={text}
       />
+
+      <section className="results-controls knowledge-base-filter">
+        <div className="filter-headline">
+          <span>{text.knowledgeBase}</span>
+          {selectedKnowledgeBases.length > 0 && (
+            <button type="button" className="text-button" onClick={() => setSelectedKnowledgeBases([])}>
+              {text.clearFilters}
+            </button>
+          )}
+        </div>
+        <div className="keyword-chips">
+          {(knowledgeBasesQuery.data?.knowledge_bases ?? []).map((item) => (
+            <button
+              key={item.name}
+              type="button"
+              className={`keyword-chip ${selectedKnowledgeBases.includes(item.name) ? "active" : ""}`}
+              onClick={() => toggleKnowledgeBase(item.name)}
+            >
+              {item.name} ({item.document_count})
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="results-zone">
         <SearchStatus

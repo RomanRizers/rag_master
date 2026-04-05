@@ -76,6 +76,15 @@ class ChatServiceRankingTestCase(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]["id"], "a")
 
+    def test_apply_search_filters_by_knowledge_base(self):
+        results = [
+            {"id": "a", "payload": {"document_name": "A.pdf", "tags": ["finance"], "knowledge_base": "kb-a"}},
+            {"id": "b", "payload": {"document_name": "B.pdf", "tags": ["finance"], "knowledge_base": "kb-b"}},
+        ]
+        filtered = _apply_search_filters(results, {"knowledge_bases": ["kb-b"]})
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["id"], "b")
+
 
 if __name__ == "__main__":
     unittest.main()

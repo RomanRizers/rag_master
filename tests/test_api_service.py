@@ -17,7 +17,7 @@ class ApiServiceTestCase(unittest.TestCase):
         result = service.search_query("hello", top_k=2, keywords=["One", "Two"])
 
         self.assertEqual(result["total"], 2)
-        mock_qdrant.search.assert_called_once_with([0.1, 0.2], 2, ["one", "two"])
+        mock_qdrant.search.assert_called_once_with([0.1, 0.2], 2, ["one", "two"], filters=None)
 
     def test_search_query_wraps_vectorizer_error(self):
         mock_vectorizer = Mock()

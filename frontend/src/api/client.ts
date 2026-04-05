@@ -10,6 +10,7 @@ import type {
   DocumentIndexResponse,
   DocumentIndexStatsResponse,
   DocumentListResponse,
+  KnowledgeBaseListResponse,
   DocumentUploadResponse,
   JobListResponse,
   SearchRequest,
@@ -81,11 +82,23 @@ export async function listDocuments(): Promise<DocumentListResponse> {
   return apiGet<DocumentListResponse>("/api/documents");
 }
 
-export async function uploadDocument(file: File, sourceName?: string, tags?: string[]): Promise<DocumentUploadResponse> {
+export async function listKnowledgeBases(): Promise<KnowledgeBaseListResponse> {
+  return apiGet<KnowledgeBaseListResponse>("/api/knowledge-bases");
+}
+
+export async function uploadDocument(
+  file: File,
+  sourceName?: string,
+  tags?: string[],
+  knowledgeBase?: string
+): Promise<DocumentUploadResponse> {
   const formData = new FormData();
   formData.set("file", file);
   if (sourceName && sourceName.trim()) {
     formData.set("source_name", sourceName.trim());
+  }
+  if (knowledgeBase && knowledgeBase.trim()) {
+    formData.set("knowledge_base", knowledgeBase.trim());
   }
   for (const tag of tags ?? []) {
     if (tag.trim()) {
