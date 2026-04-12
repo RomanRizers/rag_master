@@ -190,6 +190,61 @@ class QdrantService:
         logger.info("qdrant_list_indexed_document_ids_finished", documents_count=len(result))
         return result
 
+    def get_document_index_summary(self, document_id: str, batch_size: int = 128) -> dict:
+        logger.info("qdrant_get_document_index_summary_started", document_id=document_id)
+        if not self._collection_exists():
+            return {"chunks_count": 0, "keywords": [], "document_keywords": [], "index_profile": None}
+
+        chunk_count = 0
+        keyword_counts: dict[str, int] = {}
+        document_keyword_counts: dict[str, int] = {}
+        index_profile = None
+        offset = None
+        try:
+            while True:
+                points, next_offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="document_id",
+                                match=MatchValue(value=document_id),
+                            )
+                        ]
+                    ),
+                    limit=batch_size,
+                    offset=offset,
+                    with_payload=["keywords", "document_keywords", "index_profile"],
+                    with_vectors=False,
+                )
+                if not points:
+                    break
+                for point in points:
+                    payload = getattr(point, "payload", None) or {}
+                    chunk_count += 1
+                    for keyword in payload.get("keywords") or []:
+                        normalized = str(keyword).strip().lower()
+                        if normalized:
+                            keyword_counts[normalized] = keyword_counts.get(normalized, 0) + 1
+                    for keyword in payload.get("document_keywords") or []:
+                        normalized = str(keyword).strip().lower()
+                        if normalized:
+                            document_keyword_counts[normalized] = document_keyword_counts.get(normalized, 0) + 1
+                    if index_profile is None and isinstance(payload.get("index_profile"), dict):
+                        index_profile = dict(payload["index_profile"])
+                if next_offset is None or next_offset == offset:
+                    break
+                offset = next_offset
+        except Exception as error:
+            raise StorageError(message="Qdrant document summary failed", details={"reason": str(error)}) from error
+
+        return {
+            "chunks_count": chunk_count,
+            "keywords": _top_keywords(keyword_counts, 12),
+            "document_keywords": _top_keywords(document_keyword_counts, 16),
+            "index_profile": index_profile,
+        }
+
     def _ensure_collection(self, vector_size: int):
         if self._collection_exists():
             return
@@ -210,3 +265,10 @@ class QdrantService:
             return True
         except Exception:
             return False
+
+
+def _top_keywords(counts: dict[str, int], limit: int) -> list[str]:
+    return [
+        keyword
+        for keyword, _ in sorted(counts.items(), key=lambda item: (-item[1], len(item[0]), item[0]))[:limit]
+    ]

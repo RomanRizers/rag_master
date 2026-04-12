@@ -125,3 +125,17 @@ class ApiService:
             ) from error
         logger.info("list_indexed_document_ids_finished", documents_count=len(ids))
         return ids
+
+    def get_document_index_summary(self, document_id: str) -> dict:
+        logger.info("get_document_index_summary_started", document_id=document_id)
+        try:
+            summary = self.qdrant_service.get_document_index_summary(document_id)
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while getting document index summary",
+                details={"document_id": document_id, "reason": str(error)},
+            ) from error
+        logger.info("get_document_index_summary_finished", document_id=document_id, chunks_count=summary.get("chunks_count"))
+        return summary

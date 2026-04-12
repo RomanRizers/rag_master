@@ -56,6 +56,20 @@ class _ApiServiceCapturePayload:
     def count_document_chunks(self, document_id: str):
         return 11
 
+    def get_document_index_summary(self, document_id: str):
+        return {
+            "chunks_count": 11,
+            "keywords": ["chunk-one", "chunk-two"],
+            "document_keywords": ["doc-one", "doc-two"],
+            "index_profile": {
+                "profile_mode": "balanced",
+                "chunk_size_tokens": 320,
+                "chunk_overlap_tokens": 64,
+                "chunk_keyword_limit": 6,
+                "document_keyword_limit": 16,
+            },
+        }
+
     def list_indexed_document_ids(self):
         return ["known-document", "orphan-document"]
 
@@ -212,6 +226,7 @@ class IngestionServiceTestCase(unittest.TestCase):
             self.assertEqual(stats["document_id"], record["document_id"])
             self.assertEqual(stats["status"], "uploaded")
             self.assertEqual(stats["chunks_count"], 11)
+            self.assertEqual(stats["document_keywords"], ["doc-one", "doc-two"])
             self.assertEqual(stats["latest_job"]["job_id"], queued["job_id"])
 
     def test_cleanup_orphan_chunks_dry_run(self):

@@ -254,7 +254,8 @@ class IngestionService:
 
     def get_document_index_stats(self, document_id: str) -> dict:
         document = self.document_service.get_document(document_id)
-        chunks_count = self.api_service.count_document_chunks(document_id)
+        summary = self.api_service.get_document_index_summary(document_id)
+        chunks_count = int(summary.get("chunks_count") or 0)
         jobs = [job for job in self.job_store.list_jobs() if job.get("document_id") == document_id]
         jobs.sort(key=lambda item: item.get("started_at") or "", reverse=True)
         latest_job = jobs[0] if jobs else None
@@ -262,6 +263,9 @@ class IngestionService:
             "document_id": document_id,
             "status": document.status,
             "chunks_count": chunks_count,
+            "keywords": list(summary.get("keywords") or []),
+            "document_keywords": list(summary.get("document_keywords") or []),
+            "index_profile": summary.get("index_profile"),
             "latest_job": latest_job,
         }
 

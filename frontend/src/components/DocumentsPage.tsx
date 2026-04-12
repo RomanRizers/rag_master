@@ -20,7 +20,22 @@ import type { DocumentItem, JobItem, KnowledgeBaseItem } from "../types";
 import { appErrorCopy } from "../utils/appError";
 import { ErrorBanner } from "./ErrorBanner";
 
-type StatsByDocument = Record<string, { chunks_count: number; latest_job_status?: string | null }>;
+type StatsByDocument = Record<
+  string,
+  {
+    chunks_count: number;
+    latest_job_status?: string | null;
+    keywords?: string[];
+    document_keywords?: string[];
+    index_profile?: {
+      profile_mode?: string;
+      chunk_size_tokens?: number;
+      chunk_overlap_tokens?: number;
+      chunk_keyword_limit?: number;
+      document_keyword_limit?: number;
+    } | null;
+  }
+>;
 
 const PROFILE_PRESETS = {
   precision: {
@@ -221,7 +236,10 @@ export function DocumentsPage() {
         ...current,
         [stats.document_id]: {
           chunks_count: stats.chunks_count,
-          latest_job_status: stats.latest_job?.status ?? null
+          latest_job_status: stats.latest_job?.status ?? null,
+          keywords: stats.keywords,
+          document_keywords: stats.document_keywords,
+          index_profile: stats.index_profile
         }
       }));
     }
@@ -813,7 +831,14 @@ export function DocumentsPage() {
                           <span className={`document-status-badge status-${document.status}`}>{document.status}</span>
                         </div>
                         <div className="dataset-cell">
-                          <span>{stats?.chunks_count ?? "—"}</span>
+                          <div className="dataset-cell-stack">
+                            <span>{stats?.chunks_count ?? "—"}</span>
+                            {stats?.document_keywords?.length ? (
+                              <span className="dataset-inline-meta">
+                                {stats.document_keywords.slice(0, 3).join(", ")}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                         <div className="dataset-cell">
                           <span>{document.tags.length ? document.tags.join(", ") : "—"}</span>
@@ -876,6 +901,64 @@ export function DocumentsPage() {
                     </div>
                   </article>
                 ))}
+              </div>
+            </section>
+
+            <section className="subpanel">
+              <div className="section-head-row">
+                <div>
+                  <h3>Indexed keywords</h3>
+                  <p className="muted">Сгенерированные document-level и chunk-level keywords по выбранным документам.</p>
+                </div>
+              </div>
+
+              <div className="dataset-keywords-list">
+                {selectedDocuments.length === 0 && <p className="muted">Нет документов для просмотра.</p>}
+                {selectedDocuments.map((document) => {
+                  const stats = statsByDocument[document.document_id];
+                  if (!stats?.document_keywords?.length && !stats?.keywords?.length) {
+                    return (
+                      <article className="dataset-keywords-card" key={document.document_id}>
+                        <strong>{document.file_name}</strong>
+                        <p className="muted">Нажми `Stats`, чтобы подтянуть keywords из индекса.</p>
+                      </article>
+                    );
+                  }
+                  return (
+                    <article className="dataset-keywords-card" key={document.document_id}>
+                      <div className="dataset-keywords-head">
+                        <strong>{document.file_name}</strong>
+                        {stats.index_profile?.profile_mode ? (
+                          <span className="dataset-pill">{stats.index_profile.profile_mode}</span>
+                        ) : null}
+                      </div>
+                      {stats.document_keywords?.length ? (
+                        <div className="dataset-keyword-group">
+                          <span className="dataset-keyword-label">Document keywords</span>
+                          <div className="dataset-keyword-chips">
+                            {stats.document_keywords.map((keyword) => (
+                              <span className="chip" key={`${document.document_id}-doc-${keyword}`}>
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {stats.keywords?.length ? (
+                        <div className="dataset-keyword-group">
+                          <span className="dataset-keyword-label">Chunk keywords</span>
+                          <div className="dataset-keyword-chips">
+                            {stats.keywords.map((keyword) => (
+                              <span className="chip muted-chip" key={`${document.document_id}-chunk-${keyword}`}>
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           </section>

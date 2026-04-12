@@ -120,6 +120,16 @@ class ApiServiceTestCase(unittest.TestCase):
         with self.assertRaises(StorageError):
             service.list_indexed_document_ids()
 
+    def test_get_document_index_summary_calls_qdrant(self):
+        mock_qdrant = Mock()
+        mock_qdrant.get_document_index_summary.return_value = {"chunks_count": 3, "keywords": ["a"]}
+        service = ApiService(qdrant_service=mock_qdrant, vectorizer=Mock())
+
+        result = service.get_document_index_summary("d1")
+
+        self.assertEqual(result["chunks_count"], 3)
+        mock_qdrant.get_document_index_summary.assert_called_once_with("d1")
+
 
 if __name__ == "__main__":
     unittest.main()

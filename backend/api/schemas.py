@@ -241,6 +241,9 @@ class DocumentIndexStatsResponse(BaseModel):
     document_id: str
     status: str
     chunks_count: int
+    keywords: list[str] = Field(default_factory=list)
+    document_keywords: list[str] = Field(default_factory=list)
+    index_profile: dict | None = None
     latest_job: JobStatusResponse | None = None
 
 

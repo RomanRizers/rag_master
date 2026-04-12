@@ -88,6 +88,15 @@ export type DocumentIndexStatsResponse = {
   document_id: string;
   status: string;
   chunks_count: number;
+  keywords: string[];
+  document_keywords: string[];
+  index_profile?: {
+    profile_mode?: string;
+    chunk_size_tokens?: number;
+    chunk_overlap_tokens?: number;
+    chunk_keyword_limit?: number;
+    document_keyword_limit?: number;
+  } | null;
   latest_job?: JobItem | null;
 };
 

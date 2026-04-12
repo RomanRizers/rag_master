@@ -1087,6 +1087,62 @@ div {
   flex-wrap: wrap;
 }
 
+.dataset-cell-stack {
+  display: grid;
+  gap: 4px;
+}
+
+.dataset-inline-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.dataset-keywords-list {
+  display: grid;
+  gap: 12px;
+}
+
+.dataset-keywords-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.dataset-keywords-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dataset-keyword-group {
+  display: grid;
+  gap: 8px;
+}
+
+.dataset-keyword-label {
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.dataset-keyword-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.muted-chip {
+  opacity: 0.8;
+}
+
 .compact-jobs-list {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
