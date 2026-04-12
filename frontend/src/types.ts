@@ -89,15 +89,33 @@ export type DocumentIndexStatsResponse = {
   status: string;
   chunks_count: number;
   keywords: string[];
-  document_keywords: string[];
   index_profile?: {
     profile_mode?: string;
     chunk_size_tokens?: number;
     chunk_overlap_tokens?: number;
     chunk_keyword_limit?: number;
-    document_keyword_limit?: number;
   } | null;
   latest_job?: JobItem | null;
+};
+
+export type DocumentChunkItem = {
+  chunk_id: string;
+  chunk_index: number;
+  content: string;
+  keywords: string[];
+  page?: number | null;
+  section?: string | null;
+  token_count: number;
+  block_type?: string | null;
+  heading_path: string[];
+  document_id?: string | null;
+  document_name?: string | null;
+};
+
+export type DocumentChunksResponse = {
+  document_id: string;
+  file_name: string;
+  chunks: DocumentChunkItem[];
 };
 
 export type ChatCitation = {
@@ -169,7 +187,6 @@ export type KnowledgeBaseItem = {
   chunk_size_tokens: number;
   chunk_overlap_tokens: number;
   chunk_keyword_limit: number;
-  document_keyword_limit: number;
 };
 
 export type KnowledgeBaseListResponse = {
@@ -184,7 +201,6 @@ export type KnowledgeBaseCreateResponse = {
   chunk_size_tokens: number;
   chunk_overlap_tokens: number;
   chunk_keyword_limit: number;
-  document_keyword_limit: number;
 };
 
 export type KnowledgeBaseResponse = {
@@ -195,7 +211,6 @@ export type KnowledgeBaseResponse = {
   chunk_size_tokens: number;
   chunk_overlap_tokens: number;
   chunk_keyword_limit: number;
-  document_keyword_limit: number;
 };
 
 export type KnowledgeBaseDeleteResponse = {
@@ -209,7 +224,6 @@ export type KnowledgeBaseUpdateRequest = {
   chunk_size_tokens?: number;
   chunk_overlap_tokens?: number;
   chunk_keyword_limit?: number;
-  document_keyword_limit?: number;
 };
 
 export type KnowledgeBaseReindexResponse = {

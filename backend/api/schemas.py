@@ -247,6 +247,26 @@ class DocumentIndexStatsResponse(BaseModel):
     latest_job: JobStatusResponse | None = None
 
 
+class DocumentChunkItem(BaseModel):
+    chunk_id: str
+    chunk_index: int
+    content: str
+    keywords: list[str] = Field(default_factory=list)
+    page: int | None = None
+    section: str | None = None
+    token_count: int = 0
+    block_type: str | None = None
+    heading_path: list[str] = Field(default_factory=list)
+    document_id: str | None = None
+    document_name: str | None = None
+
+
+class DocumentChunksResponse(BaseModel):
+    document_id: str
+    file_name: str
+    chunks: list[DocumentChunkItem]
+
+
 class OrphanCleanupRequest(BaseModel):
     dry_run: bool = True
 

@@ -273,6 +273,14 @@ class IngestionService:
             "latest_job": latest_job,
         }
 
+    def get_document_chunks(self, document_id: str) -> dict:
+        document = self.document_service.get_document(document_id)
+        return {
+            "document_id": document_id,
+            "file_name": document.file_name,
+            "chunks": self.api_service.get_document_chunks(document_id),
+        }
+
     def cleanup_orphan_chunks(self, dry_run: bool = True) -> dict:
         indexed_ids = set(self.api_service.list_indexed_document_ids())
         existing_ids = {item["document_id"] for item in self.document_service.list_documents()}

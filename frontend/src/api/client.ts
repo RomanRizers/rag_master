@@ -7,6 +7,7 @@ import type {
   ChatSessionDeleteResponse,
   ChatSessionListResponse,
   DocumentDeleteResponse,
+  DocumentChunksResponse,
   DocumentIndexResponse,
   DocumentIndexStatsResponse,
   DocumentListResponse,
@@ -173,6 +174,10 @@ export async function indexDocument(documentId: string): Promise<DocumentIndexRe
 
 export async function getDocumentIndexStats(documentId: string): Promise<DocumentIndexStatsResponse> {
   return apiGet<DocumentIndexStatsResponse>(`/api/documents/${documentId}/index-stats`);
+}
+
+export async function getDocumentChunks(documentId: string): Promise<DocumentChunksResponse> {
+  return apiGet<DocumentChunksResponse>(`/api/documents/${documentId}/chunks`);
 }
 
 export async function deleteDocument(documentId: string): Promise<DocumentDeleteResponse> {

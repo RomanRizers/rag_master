@@ -6,6 +6,7 @@ import {
   createKnowledgeBase,
   deleteKnowledgeBase,
   deleteDocument,
+  getDocumentChunks,
   getDocumentIndexStats,
   indexDocument,
   listDocuments,
@@ -16,8 +17,8 @@ import {
   updateKnowledgeBase,
   uploadDocument
 } from "../api/client";
-import type { DocumentItem, JobItem, KnowledgeBaseItem } from "../types";
-import { appErrorCopy } from "../utils/appError";
+import type { DocumentChunkItem, DocumentItem, JobItem, KnowledgeBaseItem } from "../types";
+import { appErrorCopy, resolveAppError } from "../utils/appError";
 import { ErrorBanner } from "./ErrorBanner";
 
 type StatsByDocument = Record<
@@ -26,13 +27,11 @@ type StatsByDocument = Record<
     chunks_count: number;
     latest_job_status?: string | null;
     keywords?: string[];
-    document_keywords?: string[];
     index_profile?: {
       profile_mode?: string;
       chunk_size_tokens?: number;
       chunk_overlap_tokens?: number;
       chunk_keyword_limit?: number;
-      document_keyword_limit?: number;
     } | null;
   }
 >;
@@ -41,29 +40,25 @@ const PROFILE_PRESETS = {
   precision: {
     chunk_size_tokens: 220,
     chunk_overlap_tokens: 40,
-    chunk_keyword_limit: 5,
-    document_keyword_limit: 12
+    chunk_keyword_limit: 5
   },
   balanced: {
     chunk_size_tokens: 320,
     chunk_overlap_tokens: 64,
-    chunk_keyword_limit: 6,
-    document_keyword_limit: 16
+    chunk_keyword_limit: 6
   },
   recall: {
     chunk_size_tokens: 480,
     chunk_overlap_tokens: 96,
-    chunk_keyword_limit: 8,
-    document_keyword_limit: 20
+    chunk_keyword_limit: 8
   }
-} satisfies Record<string, Omit<KnowledgeBaseItem, "name" | "document_count" | "created_at" | "profile_mode">>;
+} as const;
 
 type KnowledgeBaseSettingsState = {
   profile_mode: string;
   chunk_size_tokens: number;
   chunk_overlap_tokens: number;
   chunk_keyword_limit: number;
-  document_keyword_limit: number;
 };
 
 function formatBytes(value: number): string {
@@ -96,25 +91,32 @@ function makeDatasetBadge(name: string): string {
   if (!trimmed) {
     return "KB";
   }
-
   const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length === 1) {
     return parts[0].slice(0, 2).toUpperCase();
   }
-
   return parts
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
 }
 
+function chunkPreview(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 240) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 240)}…`;
+}
+
 export function DocumentsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const params = useParams<{ datasetName?: string }>();
+  const params = useParams<{ datasetName?: string; documentId?: string }>();
 
   const [file, setFile] = useState<File | null>(null);
   const [isCreateKnowledgeBaseOpen, setIsCreateKnowledgeBaseOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [newKnowledgeBaseName, setNewKnowledgeBaseName] = useState("");
   const [datasetPage, setDatasetPage] = useState(1);
   const [datasetPageSize, setDatasetPageSize] = useState(8);
@@ -126,9 +128,10 @@ export function DocumentsPage() {
     profile_mode: "balanced",
     chunk_size_tokens: 320,
     chunk_overlap_tokens: 64,
-    chunk_keyword_limit: 6,
-    document_keyword_limit: 16
+    chunk_keyword_limit: 6
   });
+  const [chunkSearch, setChunkSearch] = useState("");
+  const [selectedChunk, setSelectedChunk] = useState<DocumentChunkItem | null>(null);
 
   const documentsQuery = useQuery({
     queryKey: ["documents"],
@@ -169,7 +172,6 @@ export function DocumentsPage() {
       queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
       setIsCreateKnowledgeBaseOpen(false);
       setNewKnowledgeBaseName("");
-      setKnowledgeBase(payload.name);
       navigate(`/dataset/${encodeURIComponent(payload.name)}`);
     }
   });
@@ -181,7 +183,6 @@ export function DocumentsPage() {
       queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       if (activeKnowledgeBase === variables.currentName) {
-        setKnowledgeBase(payload.name);
         navigate(`/dataset/${encodeURIComponent(payload.name)}`);
       }
     }
@@ -207,9 +208,9 @@ export function DocumentsPage() {
         profile_mode: payload.profile_mode,
         chunk_size_tokens: payload.chunk_size_tokens,
         chunk_overlap_tokens: payload.chunk_overlap_tokens,
-        chunk_keyword_limit: payload.chunk_keyword_limit,
-        document_keyword_limit: payload.document_keyword_limit
+        chunk_keyword_limit: payload.chunk_keyword_limit
       });
+      setIsSettingsOpen(false);
     }
   });
 
@@ -218,6 +219,7 @@ export function DocumentsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
+      setIsSettingsOpen(false);
     }
   });
 
@@ -226,22 +228,6 @@ export function DocumentsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
-    }
-  });
-
-  const statsMutation = useMutation({
-    mutationFn: getDocumentIndexStats,
-    onSuccess: (stats) => {
-      setStatsByDocument((current) => ({
-        ...current,
-        [stats.document_id]: {
-          chunks_count: stats.chunks_count,
-          latest_job_status: stats.latest_job?.status ?? null,
-          keywords: stats.keywords,
-          document_keywords: stats.document_keywords,
-          index_profile: stats.index_profile
-        }
-      }));
     }
   });
 
@@ -256,6 +242,9 @@ export function DocumentsPage() {
         delete next[documentId];
         return next;
       });
+      if (activeDocumentId === documentId && activeKnowledgeBase) {
+        navigate(`/dataset/${encodeURIComponent(activeKnowledgeBase)}`);
+      }
     }
   });
 
@@ -288,7 +277,6 @@ export function DocumentsPage() {
     if (apiItems.length > 0) {
       return apiItems;
     }
-
     return Array.from(documentsByKnowledgeBase.entries()).map(([name, items]) => ({
       name,
       document_count: items.length,
@@ -296,91 +284,144 @@ export function DocumentsPage() {
       profile_mode: "balanced",
       chunk_size_tokens: 320,
       chunk_overlap_tokens: 64,
-      chunk_keyword_limit: 6,
-      document_keyword_limit: 16
+      chunk_keyword_limit: 6
     }));
   }, [documentsByKnowledgeBase, knowledgeBasesQuery.data?.knowledge_bases]);
-
-  useEffect(() => {
-    setDatasetPage(1);
-  }, [datasetPageSize]);
 
   const activeKnowledgeBase = useMemo(() => {
     const routeValue = params.datasetName ? decodeURIComponent(params.datasetName) : "";
     if (!routeValue) {
       return "";
     }
-
-    const exists = knowledgeBases.some((item) => item.name === routeValue);
-    return exists ? routeValue : "";
+    return knowledgeBases.some((item) => item.name === routeValue) ? routeValue : routeValue;
   }, [knowledgeBases, params.datasetName]);
 
-  useEffect(() => {
-    if (activeKnowledgeBase) {
-      setKnowledgeBase(activeKnowledgeBase);
-    }
-  }, [activeKnowledgeBase]);
-
-  const selectedDocuments = activeKnowledgeBase
-    ? documentsByKnowledgeBase.get(activeKnowledgeBase) ?? []
-    : documents;
-
-  const selectedJobs = useMemo(() => {
-    const ids = new Set(selectedDocuments.map((document) => document.document_id));
-    return jobs.filter((job) => ids.has(job.document_id)).slice(0, 8);
-  }, [jobs, selectedDocuments]);
-
-  const indexedDocumentsCount = useMemo(
-    () => selectedDocuments.filter((item) => item.status === "indexed").length,
-    [selectedDocuments]
+  const activeDocumentId = params.documentId ?? "";
+  const selectedDatasetInfo = knowledgeBases.find((item) => item.name === activeKnowledgeBase) ?? null;
+  const selectedDocuments = useMemo(
+    () => [...(documentsByKnowledgeBase.get(activeKnowledgeBase) ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    [activeKnowledgeBase, documentsByKnowledgeBase]
   );
+  const activeDocument = selectedDocuments.find((item) => item.document_id === activeDocumentId) ?? null;
 
-  const selectedDatasetInfo = knowledgeBases.find((item) => item.name === activeKnowledgeBase);
+  const documentChunksQuery = useQuery({
+    queryKey: ["document-chunks", activeDocumentId],
+    queryFn: () => getDocumentChunks(activeDocumentId),
+    enabled: Boolean(activeDocumentId),
+    refetchInterval: activeDocumentId ? 10000 : false
+  });
+
   useEffect(() => {
     if (!selectedDatasetInfo) {
       return;
     }
+    setKnowledgeBase(activeKnowledgeBase || selectedDatasetInfo.name);
     setKnowledgeBaseSettings({
       profile_mode: selectedDatasetInfo.profile_mode,
       chunk_size_tokens: selectedDatasetInfo.chunk_size_tokens,
       chunk_overlap_tokens: selectedDatasetInfo.chunk_overlap_tokens,
-      chunk_keyword_limit: selectedDatasetInfo.chunk_keyword_limit,
-      document_keyword_limit: selectedDatasetInfo.document_keyword_limit
+      chunk_keyword_limit: selectedDatasetInfo.chunk_keyword_limit
     });
-  }, [selectedDatasetInfo]);
+  }, [activeKnowledgeBase, selectedDatasetInfo]);
 
-  const totalDatasetPages = Math.max(1, Math.ceil(knowledgeBases.length / datasetPageSize));
-  const currentDatasetPage = Math.min(datasetPage, totalDatasetPages);
-  const visibleKnowledgeBases = knowledgeBases.slice(
-    (currentDatasetPage - 1) * datasetPageSize,
-    currentDatasetPage * datasetPageSize
-  );
+  useEffect(() => {
+    if (!activeKnowledgeBase || selectedDocuments.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    const missing = selectedDocuments
+      .map((document) => document.document_id)
+      .filter((documentId) => !statsByDocument[documentId]);
+    if (missing.length === 0) {
+      return;
+    }
+    Promise.all(missing.map((documentId) => getDocumentIndexStats(documentId)))
+      .then((items) => {
+        if (cancelled) {
+          return;
+        }
+        setStatsByDocument((current) => {
+          const next = { ...current };
+          for (const stats of items) {
+            next[stats.document_id] = {
+              chunks_count: stats.chunks_count,
+              latest_job_status: stats.latest_job?.status ?? null,
+              keywords: stats.keywords,
+              index_profile: stats.index_profile
+            };
+          }
+          return next;
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeKnowledgeBase, selectedDocuments, statsByDocument]);
+
+  useEffect(() => {
+    setSelectedChunk(null);
+    setChunkSearch("");
+  }, [activeDocumentId]);
+
+  const selectedJobs = useMemo(() => {
+    return jobs.filter((job) => {
+      const document = documents.find((item) => item.document_id === job.document_id);
+      return document?.knowledge_base === activeKnowledgeBase;
+    });
+  }, [activeKnowledgeBase, documents, jobs]);
+
+  const indexedDocumentsCount = selectedDocuments.filter((item) => item.status === "indexed").length;
+  const pendingDocumentsCount = selectedDocuments.filter((item) => item.status !== "indexed").length;
+
+  const filteredKnowledgeBases = useMemo(() => {
+    return [...knowledgeBases].sort((a, b) => b.document_count - a.document_count || a.name.localeCompare(b.name));
+  }, [knowledgeBases]);
+
+  const pagedKnowledgeBases = useMemo(() => {
+    const start = (datasetPage - 1) * datasetPageSize;
+    return filteredKnowledgeBases.slice(start, start + datasetPageSize);
+  }, [datasetPage, datasetPageSize, filteredKnowledgeBases]);
+
+  const datasetPageCount = Math.max(1, Math.ceil(filteredKnowledgeBases.length / datasetPageSize));
+
+  const visibleChunks = useMemo(() => {
+    const chunks = documentChunksQuery.data?.chunks ?? [];
+    const query = chunkSearch.trim().toLowerCase();
+    if (!query) {
+      return chunks;
+    }
+    return chunks.filter((chunk) => {
+      const haystack = [chunk.content, chunk.section, chunk.keywords.join(" "), chunk.heading_path.join(" ")]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [chunkSearch, documentChunksQuery.data?.chunks]);
 
   function submitUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file) {
+    if (!file || !knowledgeBase.trim()) {
       return;
     }
     const tags = tagsText
       .split(",")
-      .map((tag) => tag.trim())
-      .filter((tag) => tag.length > 0);
-
+      .map((item) => item.trim())
+      .filter(Boolean);
     uploadMutation.mutate({
       file,
-      sourceName,
+      sourceName: sourceName.trim(),
       tags,
-      knowledgeBase: activeKnowledgeBase || knowledgeBase
+      knowledgeBase: knowledgeBase.trim()
     });
   }
 
   function submitKnowledgeBaseCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmed = newKnowledgeBaseName.trim();
-    if (!trimmed) {
+    if (!newKnowledgeBaseName.trim()) {
       return;
     }
-    createKnowledgeBaseMutation.mutate(trimmed);
+    createKnowledgeBaseMutation.mutate(newKnowledgeBaseName.trim());
   }
 
   function submitKnowledgeBaseSettings(event: FormEvent<HTMLFormElement>) {
@@ -390,7 +431,12 @@ export function DocumentsPage() {
     }
     updateKnowledgeBaseMutation.mutate({
       name: activeKnowledgeBase,
-      payload: knowledgeBaseSettings
+      payload: {
+        profile_mode: knowledgeBaseSettings.profile_mode,
+        chunk_size_tokens: knowledgeBaseSettings.chunk_size_tokens,
+        chunk_overlap_tokens: knowledgeBaseSettings.chunk_overlap_tokens,
+        chunk_keyword_limit: knowledgeBaseSettings.chunk_keyword_limit
+      }
     });
   }
 
@@ -400,272 +446,506 @@ export function DocumentsPage() {
       profile_mode: profileMode,
       chunk_size_tokens: preset.chunk_size_tokens,
       chunk_overlap_tokens: preset.chunk_overlap_tokens,
-      chunk_keyword_limit: preset.chunk_keyword_limit,
-      document_keyword_limit: preset.document_keyword_limit
+      chunk_keyword_limit: preset.chunk_keyword_limit
     });
   }
 
-  return (
-    <div className="page-section">
-      {(uploadMutation.isError ||
-        createKnowledgeBaseMutation.isError ||
-        renameKnowledgeBaseMutation.isError ||
-        deleteKnowledgeBaseMutation.isError ||
-        updateKnowledgeBaseMutation.isError ||
-        reindexKnowledgeBaseMutation.isError ||
-        documentsQuery.isError ||
-        indexMutation.isError ||
-        statsMutation.isError ||
-        deleteMutation.isError) && (
-        <ErrorBanner
-          error={
-            uploadMutation.error ??
-            createKnowledgeBaseMutation.error ??
-            renameKnowledgeBaseMutation.error ??
-            deleteKnowledgeBaseMutation.error ??
-            updateKnowledgeBaseMutation.error ??
-            reindexKnowledgeBaseMutation.error ??
-            documentsQuery.error ??
-            indexMutation.error ??
-            statsMutation.error ??
-            deleteMutation.error
-          }
-          copy={appErrorCopy.ru}
-          className="inline-error"
-        />
-      )}
+  function handleRenameKnowledgeBase(currentName: string) {
+    const nextName = window.prompt("Новое имя базы знаний", currentName)?.trim();
+    if (!nextName || nextName === currentName) {
+      return;
+    }
+    renameKnowledgeBaseMutation.mutate({ currentName, nextName });
+  }
 
-      {!activeKnowledgeBase && (
-        <section className="dataset-board panel">
-          <div className="dataset-board-head">
-            <div className="panel-head">
-              <div>
-                <span className="section-kicker">Dataset</span>
-                <h2>Knowledge Bases</h2>
-                <p>Сначала выбери базу знаний, затем работай с документами внутри неё.</p>
-              </div>
+  function handleDeleteKnowledgeBase(item: KnowledgeBaseItem) {
+    if (item.document_count > 0) {
+      return;
+    }
+    if (!window.confirm(`Удалить базу знаний "${item.name}"?`)) {
+      return;
+    }
+    deleteKnowledgeBaseMutation.mutate(item.name);
+  }
+
+  function renderDatasetGrid() {
+    return (
+      <div className="documents-layout">
+        <div className="panel dataset-page-head">
+          <div className="panel-head">
+            <div>
+              <span className="section-kicker">Dataset</span>
+              <h2>Knowledge bases</h2>
+              <p>Выбери базу знаний, затем работай с документами и индексацией внутри отдельного экрана.</p>
             </div>
-            <div className="dataset-board-actions">
-              <span className="chip">{knowledgeBases.length} баз</span>
-              <span className="chip">{documents.length} документов</span>
-              <label className="dataset-page-size">
-                <span>Показывать</span>
-                <select
-                  value={datasetPageSize}
-                  onChange={(event) => setDatasetPageSize(Number(event.target.value))}
-                >
-                  <option value={6}>6</option>
-                  <option value={8}>8</option>
-                  <option value={12}>12</option>
-                  <option value={16}>16</option>
-                </select>
-              </label>
-              {!isCreateKnowledgeBaseOpen ? (
-                <button
-                  type="button"
-                  className="primary-action"
-                  onClick={() => setIsCreateKnowledgeBaseOpen(true)}
-                >
-                  Create Knowledge Base
-                </button>
-              ) : (
-                <form className="dataset-create-form" onSubmit={submitKnowledgeBaseCreate}>
-                  <input
-                    type="text"
-                    value={newKnowledgeBaseName}
-                    placeholder="Название базы знаний"
-                    onChange={(event) => setNewKnowledgeBaseName(event.target.value)}
-                    autoFocus
-                  />
-                  <div className="dataset-create-actions">
-                    <button
-                      type="submit"
-                      className="primary-action"
-                      disabled={createKnowledgeBaseMutation.isPending || !newKnowledgeBaseName.trim()}
-                    >
-                      {createKnowledgeBaseMutation.isPending ? "Создание..." : "Create Knowledge Base"}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-action"
-                      onClick={() => {
-                        setIsCreateKnowledgeBaseOpen(false);
-                        setNewKnowledgeBaseName("");
-                      }}
-                      disabled={createKnowledgeBaseMutation.isPending}
-                    >
-                      Отмена
-                    </button>
-                  </div>
-                </form>
-              )}
+            <div className="dataset-top-actions">
+              <button className="secondary-action" type="button" onClick={() => setIsCreateKnowledgeBaseOpen(true)}>
+                Create Knowledge Base
+              </button>
             </div>
           </div>
-
           <div className="dataset-grid">
-            {visibleKnowledgeBases.map((item) => {
-              const kbDocuments = documentsByKnowledgeBase.get(item.name) ?? [];
-              const newestDocument = kbDocuments
-                .slice()
-                .sort((left, right) => (left.created_at < right.created_at ? 1 : -1))[0];
-              const indexedCount = kbDocuments.filter((document) => document.status === "indexed").length;
-
-              return (
-                <div
-                  key={item.name}
-                  className="dataset-tile"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    setKnowledgeBase(item.name);
-                    navigate(`/dataset/${encodeURIComponent(item.name)}`);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      setKnowledgeBase(item.name);
-                      navigate(`/dataset/${encodeURIComponent(item.name)}`);
-                    }
-                  }}
-                >
-                  <div className="dataset-tile-badge">{makeDatasetBadge(item.name)}</div>
-                  <div className="dataset-tile-copy">
-                    <div className="dataset-tile-actions">
-                      <button
-                        type="button"
-                        className="dataset-icon-button"
-                        aria-label={`Переименовать ${item.name}`}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          const nextName = window.prompt("Новое название базы знаний", item.name)?.trim();
-                          if (!nextName || nextName === item.name) {
-                            return;
-                          }
-                          renameKnowledgeBaseMutation.mutate({ currentName: item.name, nextName });
-                        }}
-                        disabled={renameKnowledgeBaseMutation.isPending || deleteKnowledgeBaseMutation.isPending}
-                      >
-                        ✎
-                      </button>
-                      <button
-                        type="button"
-                        className="dataset-icon-button danger"
-                        aria-label={`Удалить ${item.name}`}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          if (item.document_count > 0) {
-                            window.alert("Можно удалить только пустую базу знаний.");
-                            return;
-                          }
-                          if (!window.confirm(`Удалить базу знаний "${item.name}"?`)) {
-                            return;
-                          }
-                          deleteKnowledgeBaseMutation.mutate(item.name);
-                        }}
-                        disabled={
-                          renameKnowledgeBaseMutation.isPending ||
-                          deleteKnowledgeBaseMutation.isPending ||
-                          item.document_count > 0
-                        }
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div className="dataset-tile-topline">
-                      <strong>{item.name}</strong>
-                      <span className="dataset-tile-count">{item.document_count} files</span>
-                    </div>
-                    <div className="dataset-tile-metrics">
-                      <span className="dataset-pill">{indexedCount} indexed</span>
-                      <span className="dataset-pill">{item.document_count - indexedCount} pending</span>
-                    </div>
-                    <span>{newestDocument ? formatIso(newestDocument.created_at) : "empty dataset"}</span>
+            {pagedKnowledgeBases.map((item) => (
+              <article key={item.name} className="dataset-card">
+                <Link className="dataset-card-link" to={`/dataset/${encodeURIComponent(item.name)}`}>
+                  <div className="dataset-card-head">
+                    <span className="dataset-card-badge">{makeDatasetBadge(item.name)}</span>
+                    <span className="dataset-pill">{item.profile_mode}</span>
                   </div>
+                  <div className="stack-xs">
+                    <strong className="dataset-card-title">{item.name}</strong>
+                    <span className="muted">{item.document_count} files</span>
+                  </div>
+                  <div className="dataset-card-metrics">
+                    <span>{item.chunk_size_tokens} tokens</span>
+                    <span>{item.chunk_keyword_limit} kw/chunk</span>
+                  </div>
+                </Link>
+                <div className="dataset-card-actions">
+                  <button type="button" className="card-icon-btn" onClick={() => handleRenameKnowledgeBase(item.name)}>
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    className="card-icon-btn danger"
+                    disabled={item.document_count > 0}
+                    onClick={() => handleDeleteKnowledgeBase(item)}
+                  >
+                    Delete
+                  </button>
                 </div>
-              );
-            })}
+              </article>
+            ))}
           </div>
-
-          {knowledgeBases.length > datasetPageSize && (
-            <div className="dataset-pagination">
-              <span className="muted">
-                Page {currentDatasetPage} / {totalDatasetPages}
-              </span>
-              <div className="dataset-pagination-actions">
-                <button
-                  type="button"
-                  className="secondary-action"
-                  disabled={currentDatasetPage <= 1}
-                  onClick={() => setDatasetPage((current) => Math.max(1, current - 1))}
-                >
-                  Назад
-                </button>
-                <button
-                  type="button"
-                  className="secondary-action"
-                  disabled={currentDatasetPage >= totalDatasetPages}
-                  onClick={() => setDatasetPage((current) => Math.min(totalDatasetPages, current + 1))}
-                >
-                  Далее
-                </button>
-              </div>
+          <div className="dataset-pagination">
+            <div className="dataset-page-size">
+              <span>Show</span>
+              <select value={datasetPageSize} onChange={(event) => setDatasetPageSize(Number(event.target.value))}>
+                <option value={6}>6</option>
+                <option value={8}>8</option>
+                <option value={12}>12</option>
+                <option value={16}>16</option>
+              </select>
             </div>
-          )}
-        </section>
-      )}
+            <div className="dataset-page-controls">
+              <button type="button" className="ghost-action" disabled={datasetPage <= 1} onClick={() => setDatasetPage((page) => Math.max(1, page - 1))}>
+                Назад
+              </button>
+              <span>
+                Page {datasetPage} / {datasetPageCount}
+              </span>
+              <button
+                type="button"
+                className="ghost-action"
+                disabled={datasetPage >= datasetPageCount}
+                onClick={() => setDatasetPage((page) => Math.min(datasetPageCount, page + 1))}
+              >
+                Далее
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-      {activeKnowledgeBase && (
-        <section className="dataset-detail-layout">
-          <aside className="dataset-sidebar panel">
+  function renderDatasetDetail() {
+    return (
+      <div className="documents-layout">
+        <section className="panel dataset-detail-shell">
+          <div className="dataset-detail-top">
             <div className="dataset-breadcrumbs">
               <Link to="/dataset">Dataset</Link>
               <span>/</span>
               <span>{activeKnowledgeBase}</span>
             </div>
-            <div className="dataset-sidebar-header">
-              <div className="dataset-sidebar-badge">{makeDatasetBadge(activeKnowledgeBase)}</div>
-              <div className="stack-xs">
-                <strong className="dataset-sidebar-title">{activeKnowledgeBase}</strong>
-                <span className="muted">
-                  {selectedDatasetInfo?.document_count ?? selectedDocuments.length} files
-                </span>
+            <div className="dataset-detail-head">
+              <div className="dataset-detail-copy">
+                <div className="dataset-card-head">
+                  <span className="dataset-card-badge">{makeDatasetBadge(activeKnowledgeBase)}</span>
+                  <span className="dataset-pill">{selectedDatasetInfo?.profile_mode ?? "balanced"}</span>
+                </div>
+                <h2>{activeKnowledgeBase}</h2>
+                <p>Документы внутри базы знаний. Нажми на документ, чтобы открыть чанки и их keywords.</p>
+              </div>
+              <div className="dataset-detail-actions">
+                <button type="button" className="secondary-action" onClick={() => setIsSettingsOpen(true)}>
+                  Knowledge Base Settings
+                </button>
+                <Link to="/dataset" className="ghost-action dataset-back-link">
+                  Все базы знаний
+                </Link>
               </div>
             </div>
-
-            <div className="dataset-sidebar-stats">
+            <div className="dataset-overview-grid">
+              <article className="summary-chip-card">
+                <span>Total documents</span>
+                <strong>{selectedDocuments.length}</strong>
+              </article>
               <article className="summary-chip-card">
                 <span>Indexed</span>
                 <strong>{indexedDocumentsCount}</strong>
               </article>
               <article className="summary-chip-card">
-                <span>Total</span>
-                <strong>{selectedDocuments.length}</strong>
+                <span>Pending</span>
+                <strong>{pendingDocumentsCount}</strong>
+              </article>
+              <article className="summary-chip-card">
+                <span>Chunk size</span>
+                <strong>{selectedDatasetInfo?.chunk_size_tokens ?? knowledgeBaseSettings.chunk_size_tokens}</strong>
               </article>
             </div>
+          </div>
 
-            <form className="dataset-settings-form" onSubmit={submitKnowledgeBaseSettings}>
-              <div className="dataset-settings-head">
-                <strong>Dataset Settings</strong>
-                <span className="muted">Профиль индексирования применяется к новым документам и при реиндексации.</span>
+          <div className="dataset-detail-grid">
+            <aside className="dataset-side-rail">
+              <form className="upload-form dataset-upload-panel" onSubmit={submitUpload}>
+                <div className="section-head-row">
+                  <div>
+                    <h3>Add document</h3>
+                    <p className="muted">Загрузка документа сразу в выбранную базу знаний.</p>
+                  </div>
+                </div>
+                <label>
+                  <span>Файл</span>
+                  <input
+                    type="file"
+                    accept=".txt,.pdf,.docx"
+                    onChange={(event) => {
+                      const selected = event.target.files?.[0] ?? null;
+                      setFile(selected);
+                    }}
+                  />
+                </label>
+                <label>
+                  <span>Source name</span>
+                  <input type="text" value={sourceName} placeholder="Например: ГОСТ 17375" onChange={(event) => setSourceName(event.target.value)} />
+                </label>
+                <label>
+                  <span>Tags</span>
+                  <input type="text" value={tagsText} placeholder="gost, bends" onChange={(event) => setTagsText(event.target.value)} />
+                </label>
+                <button className="primary-action" type="submit" disabled={!file || uploadMutation.isPending}>
+                  {uploadMutation.isPending ? "Загрузка..." : "Add file"}
+                </button>
+              </form>
+
+              <section className="subpanel">
+                <div className="section-head-row">
+                  <div>
+                    <h3>Recent jobs</h3>
+                    <p className="muted">Последние операции по этой базе знаний.</p>
+                  </div>
+                </div>
+                <div className="jobs-list compact-jobs-list">
+                  {selectedJobs.length === 0 && <p className="muted">Пока нет jobs.</p>}
+                  {selectedJobs.slice(0, 6).map((job) => (
+                    <article className="job-card" key={job.job_id}>
+                      <div className="job-head">
+                        <strong>{job.status}</strong>
+                        <span>{job.progress}%</span>
+                      </div>
+                      <div className="job-body">
+                        <p>{job.job_id}</p>
+                        <p>{job.document_id}</p>
+                        <p className="muted">{formatIso(job.started_at)}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </aside>
+
+            <section className="dataset-main-stage">
+              <div className="section-head-row">
+                <div>
+                  <h3>Documents</h3>
+                  <p className="muted">Открывай документ, чтобы посмотреть чанки и auto-generated keywords.</p>
+                </div>
               </div>
+              {selectedDocuments.length === 0 ? (
+                <div className="chat-empty-state">
+                  <p className="muted">В этой базе знаний пока нет документов.</p>
+                </div>
+              ) : (
+                <div className="dataset-document-list">
+                  {selectedDocuments.map((document) => {
+                    const stats = statsByDocument[document.document_id];
+                    const docJobs = jobsByDocument.get(document.document_id) ?? [];
+                    const hasRunning = docJobs.some((job) => job.status === "queued" || job.status === "running");
+                    return (
+                      <article
+                        key={document.document_id}
+                        className="dataset-document-card"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() =>
+                          navigate(`/dataset/${encodeURIComponent(activeKnowledgeBase)}/documents/${document.document_id}`)
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigate(`/dataset/${encodeURIComponent(activeKnowledgeBase)}/documents/${document.document_id}`);
+                          }
+                        }}
+                      >
+                        <div className="dataset-document-copy">
+                          <strong>{document.file_name}</strong>
+                          <span className="muted">
+                            {formatBytes(document.size_bytes)} · {formatIso(document.created_at)}
+                          </span>
+                          {stats?.keywords?.length ? (
+                            <div className="dataset-keyword-preview">
+                              {stats.keywords.slice(0, 4).map((keyword) => (
+                                <span className="chip muted-chip" key={`${document.document_id}-${keyword}`}>
+                                  {keyword}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="muted">Keywords появятся после индексации.</span>
+                          )}
+                        </div>
+                        <div className="dataset-document-meta">
+                          <span className={`document-status-badge status-${document.status}`}>{document.status}</span>
+                          <span>{stats?.chunks_count ?? "—"} chunks</span>
+                          <span>{document.tags.length ? document.tags.join(", ") : "—"}</span>
+                        </div>
+                        <div className="dataset-document-actions" onClick={(event) => event.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="secondary-action"
+                            disabled={indexMutation.isPending || hasRunning}
+                            onClick={() => indexMutation.mutate(document.document_id)}
+                          >
+                            {hasRunning ? "В процессе..." : "Индексировать"}
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-action"
+                            disabled={deleteMutation.isPending || hasRunning}
+                            onClick={() => deleteMutation.mutate(document.document_id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
+  function renderDocumentDetail() {
+    if (!activeDocument) {
+      return (
+        <div className="documents-layout">
+          <section className="panel">
+            <p className="muted">Документ не найден в выбранной базе знаний.</p>
+          </section>
+        </div>
+      );
+    }
+
+    return (
+      <div className="documents-layout">
+        <section className="panel dataset-document-shell">
+          <div className="dataset-breadcrumbs">
+            <Link to="/dataset">Dataset</Link>
+            <span>/</span>
+            <Link to={`/dataset/${encodeURIComponent(activeKnowledgeBase)}`}>{activeKnowledgeBase}</Link>
+            <span>/</span>
+            <span>{activeDocument.file_name}</span>
+          </div>
+
+          <div className="dataset-document-top">
+            <div>
+              <span className="section-kicker">Document</span>
+              <h2>{activeDocument.file_name}</h2>
+              <p>
+                {formatBytes(activeDocument.size_bytes)} · {formatIso(activeDocument.created_at)} · {documentChunksQuery.data?.chunks.length ?? 0} chunks
+              </p>
+            </div>
+            <div className="dataset-detail-actions">
+              <button type="button" className="secondary-action" onClick={() => setIsSettingsOpen(true)}>
+                Knowledge Base Settings
+              </button>
+              <Link to={`/dataset/${encodeURIComponent(activeKnowledgeBase)}`} className="ghost-action">
+                К документам
+              </Link>
+            </div>
+          </div>
+
+          <div className="dataset-document-meta-grid">
+            <article className="summary-chip-card">
+              <span>Status</span>
+              <strong>{activeDocument.status}</strong>
+            </article>
+            <article className="summary-chip-card">
+              <span>Source</span>
+              <strong>{activeDocument.source_name || "—"}</strong>
+            </article>
+            <article className="summary-chip-card">
+              <span>Tags</span>
+              <strong>{activeDocument.tags.length ? activeDocument.tags.join(", ") : "—"}</strong>
+            </article>
+            <article className="summary-chip-card">
+              <span>Chunk keywords</span>
+              <strong>{selectedDatasetInfo?.chunk_keyword_limit ?? knowledgeBaseSettings.chunk_keyword_limit}</strong>
+            </article>
+          </div>
+
+          <div className="dataset-chunks-toolbar">
+            <div className="section-head-row">
+              <div>
+                <h3>Chunks</h3>
+                <p className="muted">Нажми на чанк, чтобы открыть полный текст и keywords.</p>
+              </div>
+            </div>
+            <input
+              type="search"
+              value={chunkSearch}
+              placeholder="Поиск по чанкам и keywords"
+              onChange={(event) => setChunkSearch(event.target.value)}
+            />
+          </div>
+
+          <div className="dataset-chunk-list">
+            {documentChunksQuery.isLoading && <p className="muted">Загрузка чанков...</p>}
+            {documentChunksQuery.isError && (
+              <p className="muted">{resolveAppError(documentChunksQuery.error, appErrorCopy.ru).message}</p>
+            )}
+            {!documentChunksQuery.isLoading && !visibleChunks.length && <p className="muted">Нет чанков для отображения.</p>}
+            {visibleChunks.map((chunk) => (
+              <article
+                key={chunk.chunk_id}
+                className="dataset-chunk-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedChunk(chunk)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedChunk(chunk);
+                  }
+                }}
+              >
+                <div className="dataset-chunk-head">
+                  <div>
+                    <strong>Chunk #{chunk.chunk_index + 1}</strong>
+                    <span className="muted">
+                      {chunk.page ? `page ${chunk.page}` : "page —"}
+                      {chunk.section ? ` · ${chunk.section}` : ""}
+                    </span>
+                  </div>
+                  <div className="dataset-chunk-meta">
+                    {chunk.block_type ? <span className="dataset-pill subtle">{chunk.block_type}</span> : null}
+                    <span>{chunk.token_count} tokens</span>
+                  </div>
+                </div>
+                <p>{chunkPreview(chunk.content)}</p>
+                <div className="dataset-keyword-preview">
+                  {chunk.keywords.map((keyword) => (
+                    <span className="chip muted-chip" key={`${chunk.chunk_id}-${keyword}`}>
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  const pageError = (
+    documentsQuery.error ??
+      jobsQuery.error ??
+      knowledgeBasesQuery.error ??
+      uploadMutation.error ??
+      createKnowledgeBaseMutation.error ??
+      renameKnowledgeBaseMutation.error ??
+      deleteKnowledgeBaseMutation.error ??
+      updateKnowledgeBaseMutation.error ??
+      reindexKnowledgeBaseMutation.error ??
+      indexMutation.error ??
+      deleteMutation.error ??
+      documentChunksQuery.error
+  );
+
+  return (
+    <div className="page-section">
+      {pageError ? <ErrorBanner error={pageError} copy={appErrorCopy.ru} className="status status-error" /> : null}
+
+      {activeKnowledgeBase ? (activeDocumentId ? renderDocumentDetail() : renderDatasetDetail()) : renderDatasetGrid()}
+
+      {isCreateKnowledgeBaseOpen ? (
+        <div className="overlay-backdrop" onClick={() => setIsCreateKnowledgeBaseOpen(false)}>
+          <section className="overlay-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="overlay-head">
+              <div>
+                <span className="section-kicker">Dataset</span>
+                <h3>Create Knowledge Base</h3>
+              </div>
+              <button type="button" className="overlay-close" onClick={() => setIsCreateKnowledgeBaseOpen(false)}>
+                ×
+              </button>
+            </div>
+            <form className="overlay-form" onSubmit={submitKnowledgeBaseCreate}>
+              <label>
+                <span>Name</span>
+                <input
+                  type="text"
+                  value={newKnowledgeBaseName}
+                  placeholder="Например: СДТ Отводы"
+                  onChange={(event) => setNewKnowledgeBaseName(event.target.value)}
+                />
+              </label>
+              <div className="overlay-actions">
+                <button type="button" className="ghost-action" onClick={() => setIsCreateKnowledgeBaseOpen(false)}>
+                  Отмена
+                </button>
+                <button type="submit" className="primary-action" disabled={createKnowledgeBaseMutation.isPending}>
+                  {createKnowledgeBaseMutation.isPending ? "Создание..." : "Create Knowledge Base"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {isSettingsOpen && activeKnowledgeBase ? (
+        <div className="overlay-backdrop" onClick={() => setIsSettingsOpen(false)}>
+          <section className="overlay-modal settings-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="overlay-head">
+              <div>
+                <span className="section-kicker">Settings</span>
+                <h3>Knowledge Base Settings</h3>
+                <p className="muted">Одна кнопка открытия, спокойный modal, только то, что реально влияет на индекс.</p>
+              </div>
+              <button type="button" className="overlay-close" onClick={() => setIsSettingsOpen(false)}>
+                ×
+              </button>
+            </div>
+            <form className="overlay-form" onSubmit={submitKnowledgeBaseSettings}>
               <label>
                 <span>Preset</span>
                 <select
                   value={knowledgeBaseSettings.profile_mode}
-                  onChange={(event) =>
-                    applyProfilePreset(event.target.value as keyof typeof PROFILE_PRESETS)
-                  }
+                  onChange={(event) => applyProfilePreset(event.target.value as keyof typeof PROFILE_PRESETS)}
                 >
                   <option value="precision">Precision</option>
                   <option value="balanced">Balanced</option>
                   <option value="recall">Recall</option>
                 </select>
               </label>
-
-              <div className="dataset-settings-grid">
+              <div className="settings-form-grid">
                 <label>
                   <span>Chunk size</span>
                   <input
@@ -697,7 +977,7 @@ export function DocumentsPage() {
                   />
                 </label>
                 <label>
-                  <span>Chunk keywords</span>
+                  <span>Keywords per chunk</span>
                   <input
                     type="number"
                     min={1}
@@ -711,31 +991,8 @@ export function DocumentsPage() {
                     }
                   />
                 </label>
-                <label>
-                  <span>Document keywords</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={32}
-                    value={knowledgeBaseSettings.document_keyword_limit}
-                    onChange={(event) =>
-                      setKnowledgeBaseSettings((current) => ({
-                        ...current,
-                        document_keyword_limit: Number(event.target.value)
-                      }))
-                    }
-                  />
-                </label>
               </div>
-
-              <div className="dataset-settings-actions">
-                <button
-                  type="submit"
-                  className="secondary-action"
-                  disabled={updateKnowledgeBaseMutation.isPending}
-                >
-                  {updateKnowledgeBaseMutation.isPending ? "Сохранение..." : "Save settings"}
-                </button>
+              <div className="overlay-actions">
                 <button
                   type="button"
                   className="ghost-action"
@@ -744,226 +1001,62 @@ export function DocumentsPage() {
                 >
                   {reindexKnowledgeBaseMutation.isPending ? "Реиндексация..." : "Reindex all"}
                 </button>
+                <button type="submit" className="primary-action" disabled={updateKnowledgeBaseMutation.isPending}>
+                  {updateKnowledgeBaseMutation.isPending ? "Сохранение..." : "Save settings"}
+                </button>
               </div>
             </form>
-
-            <form className="upload-form dataset-upload-form" onSubmit={submitUpload}>
-              <label>
-                <span>Файл</span>
-                <input
-                  type="file"
-                  accept=".txt,.pdf,.docx"
-                  onChange={(event) => {
-                    const selected = event.target.files?.[0] ?? null;
-                    setFile(selected);
-                  }}
-                />
-              </label>
-              <label>
-                <span>Source name</span>
-                <input
-                  type="text"
-                  value={sourceName}
-                  placeholder="Например: ГОСТ 30753"
-                  onChange={(event) => setSourceName(event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Теги</span>
-                <input
-                  type="text"
-                value={tagsText}
-                placeholder="gost, fittings"
-                onChange={(event) => setTagsText(event.target.value)}
-              />
-              </label>
-              <button className="primary-action" type="submit" disabled={!file || uploadMutation.isPending}>
-                {uploadMutation.isPending ? "Загрузка..." : "Добавить документ"}
-              </button>
-            </form>
-          </aside>
-
-          <section className="dataset-main panel">
-            <div className="dataset-main-head">
-              <div className="panel-head">
-                <div>
-                  <span className="section-kicker">Dataset</span>
-                  <h2>{activeKnowledgeBase}</h2>
-                  <p>Документы, индексация и статусы внутри выбранной базы знаний.</p>
-                </div>
-              </div>
-              <Link to="/dataset" className="secondary-action dataset-back-link">
-                Все базы знаний
-              </Link>
-            </div>
-
-            {selectedDocuments.length === 0 ? (
-              <div className="chat-empty-state">
-                <p className="muted">В этой базе знаний пока нет документов.</p>
-              </div>
-            ) : (
-              <div className="dataset-table-wrap">
-                <div className="dataset-table">
-                  <div className="dataset-table-head">
-                    <span>Name</span>
-                    <span>Upload date</span>
-                    <span>Status</span>
-                    <span>Chunks</span>
-                    <span>Tags</span>
-                    <span>Action</span>
-                  </div>
-
-                  {selectedDocuments.map((document) => {
-                    const stats = statsByDocument[document.document_id];
-                    const docJobs = jobsByDocument.get(document.document_id) ?? [];
-                    const hasRunning = docJobs.some((job) => job.status === "queued" || job.status === "running");
-
-                    return (
-                      <article key={document.document_id} className="dataset-row">
-                        <div className="dataset-cell dataset-cell-name">
-                          <strong>{document.file_name}</strong>
-                          <span className="muted">{formatBytes(document.size_bytes)}</span>
-                        </div>
-                        <div className="dataset-cell">
-                          <span>{formatIso(document.created_at)}</span>
-                        </div>
-                        <div className="dataset-cell">
-                          <span className={`document-status-badge status-${document.status}`}>{document.status}</span>
-                        </div>
-                        <div className="dataset-cell">
-                          <div className="dataset-cell-stack">
-                            <span>{stats?.chunks_count ?? "—"}</span>
-                            {stats?.document_keywords?.length ? (
-                              <span className="dataset-inline-meta">
-                                {stats.document_keywords.slice(0, 3).join(", ")}
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="dataset-cell">
-                          <span>{document.tags.length ? document.tags.join(", ") : "—"}</span>
-                        </div>
-                        <div className="dataset-cell dataset-cell-actions">
-                          <button
-                            type="button"
-                            className="secondary-action"
-                            disabled={indexMutation.isPending || hasRunning}
-                            onClick={() => indexMutation.mutate(document.document_id)}
-                          >
-                            {hasRunning ? "В процессе..." : "Индексировать"}
-                          </button>
-                          <button
-                            type="button"
-                            className="ghost-action"
-                            disabled={statsMutation.isPending || deleteMutation.isPending}
-                            onClick={() => statsMutation.mutate(document.document_id)}
-                          >
-                            Stats
-                          </button>
-                          <button
-                            type="button"
-                            className="danger-action"
-                            disabled={deleteMutation.isPending || hasRunning}
-                            onClick={() => deleteMutation.mutate(document.document_id)}
-                          >
-                            Удалить
-                          </button>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <section className="subpanel">
-              <div className="section-head-row">
-                <div>
-                  <h3>Recent jobs</h3>
-                  <p className="muted">Последние операции по этой базе знаний.</p>
-                </div>
-              </div>
-
-              <div className="jobs-list compact-jobs-list">
-                {selectedJobs.length === 0 && <p className="muted">Пока нет jobs.</p>}
-                {selectedJobs.map((job) => (
-                  <article className="job-card" key={job.job_id}>
-                    <div className="job-head">
-                      <strong>{job.status}</strong>
-                      <span>{job.progress}%</span>
-                    </div>
-                    <div className="job-body">
-                      <p>{job.job_id}</p>
-                      <p>{job.document_id}</p>
-                      <p className="muted">
-                        {formatIso(job.started_at)} → {formatIso(job.finished_at)}
-                      </p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section className="subpanel">
-              <div className="section-head-row">
-                <div>
-                  <h3>Indexed keywords</h3>
-                  <p className="muted">Сгенерированные document-level и chunk-level keywords по выбранным документам.</p>
-                </div>
-              </div>
-
-              <div className="dataset-keywords-list">
-                {selectedDocuments.length === 0 && <p className="muted">Нет документов для просмотра.</p>}
-                {selectedDocuments.map((document) => {
-                  const stats = statsByDocument[document.document_id];
-                  if (!stats?.document_keywords?.length && !stats?.keywords?.length) {
-                    return (
-                      <article className="dataset-keywords-card" key={document.document_id}>
-                        <strong>{document.file_name}</strong>
-                        <p className="muted">Нажми `Stats`, чтобы подтянуть keywords из индекса.</p>
-                      </article>
-                    );
-                  }
-                  return (
-                    <article className="dataset-keywords-card" key={document.document_id}>
-                      <div className="dataset-keywords-head">
-                        <strong>{document.file_name}</strong>
-                        {stats.index_profile?.profile_mode ? (
-                          <span className="dataset-pill">{stats.index_profile.profile_mode}</span>
-                        ) : null}
-                      </div>
-                      {stats.document_keywords?.length ? (
-                        <div className="dataset-keyword-group">
-                          <span className="dataset-keyword-label">Document keywords</span>
-                          <div className="dataset-keyword-chips">
-                            {stats.document_keywords.map((keyword) => (
-                              <span className="chip" key={`${document.document_id}-doc-${keyword}`}>
-                                {keyword}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      {stats.keywords?.length ? (
-                        <div className="dataset-keyword-group">
-                          <span className="dataset-keyword-label">Chunk keywords</span>
-                          <div className="dataset-keyword-chips">
-                            {stats.keywords.map((keyword) => (
-                              <span className="chip muted-chip" key={`${document.document_id}-chunk-${keyword}`}>
-                                {keyword}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
           </section>
-        </section>
-      )}
+        </div>
+      ) : null}
+
+      {selectedChunk ? (
+        <div className="overlay-backdrop" onClick={() => setSelectedChunk(null)}>
+          <section className="overlay-modal chunk-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="overlay-head">
+              <div>
+                <span className="section-kicker">Chunk</span>
+                <h3>Chunk #{selectedChunk.chunk_index + 1}</h3>
+                <p className="muted">
+                  {selectedChunk.page ? `page ${selectedChunk.page}` : "page —"}
+                  {selectedChunk.section ? ` · ${selectedChunk.section}` : ""}
+                </p>
+              </div>
+              <button type="button" className="overlay-close" onClick={() => setSelectedChunk(null)}>
+                ×
+              </button>
+            </div>
+            <div className="chunk-modal-body">
+              <section className="chunk-content-panel">
+                <span className="meta-label">Chunk</span>
+                <div className="chunk-content-box">{selectedChunk.content}</div>
+              </section>
+              <section className="chunk-keywords-panel">
+                <span className="meta-label">Keywords</span>
+                <div className="dataset-keyword-preview">
+                  {selectedChunk.keywords.map((keyword) => (
+                    <span className="chip" key={`${selectedChunk.chunk_id}-modal-${keyword}`}>
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+                {selectedChunk.heading_path.length ? (
+                  <>
+                    <span className="meta-label">Heading path</span>
+                    <div className="dataset-keyword-preview">
+                      {selectedChunk.heading_path.map((item) => (
+                        <span className="chip muted-chip" key={`${selectedChunk.chunk_id}-heading-${item}`}>
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </section>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

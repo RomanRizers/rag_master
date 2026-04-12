@@ -17,6 +17,7 @@ from backend.api.schemas import (
     KnowledgeBaseReindexResponse,
     KnowledgeBaseResponse,
     DocumentIndexResponse,
+    DocumentChunksResponse,
     DocumentIndexStatsResponse,
     KnowledgeBaseListResponse,
     DocumentListResponse,
@@ -257,6 +258,13 @@ async def index_document(request: Request, document_id: str):
 async def get_document_index_stats(request: Request, document_id: str):
     stats = await run_in_threadpool(get_ingestion_service(request).get_document_index_stats, document_id)
     response = DocumentIndexStatsResponse.model_validate(stats)
+    return JSONResponse(content=response.model_dump())
+
+
+@api_router.get("/api/documents/{document_id}/chunks")
+async def get_document_chunks(request: Request, document_id: str):
+    payload = await run_in_threadpool(get_ingestion_service(request).get_document_chunks, document_id)
+    response = DocumentChunksResponse.model_validate(payload)
     return JSONResponse(content=response.model_dump())
 
 

@@ -155,6 +155,20 @@ class ApiService:
         logger.info("get_document_index_summary_finished", document_id=document_id, chunks_count=summary.get("chunks_count"))
         return summary
 
+    def get_document_chunks(self, document_id: str) -> list[dict]:
+        logger.info("get_document_chunks_started", document_id=document_id)
+        try:
+            chunks = self.qdrant_service.get_document_chunks(document_id)
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while reading document chunks",
+                details={"document_id": document_id, "reason": str(error)},
+            ) from error
+        logger.info("get_document_chunks_finished", document_id=document_id, chunks_count=len(chunks))
+        return chunks
+
 
 def _dedupe(values: list[str]) -> list[str]:
     seen = set()

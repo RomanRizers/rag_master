@@ -225,6 +225,53 @@ class QdrantService:
             "index_profile": index_profile,
         }
 
+    def get_document_chunks(self, document_id: str, batch_size: int = 128) -> list[dict]:
+        if not self._collection_exists():
+            return []
+        offset = None
+        rows: list[dict] = []
+        try:
+            while True:
+                points, next_offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="document_id",
+                                match=MatchValue(value=document_id),
+                            )
+                        ]
+                    ),
+                    limit=batch_size,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                for point in points:
+                    payload = getattr(point, "payload", None) or {}
+                    rows.append(
+                        {
+                            "chunk_id": str(payload.get("chunk_id") or point.id),
+                            "chunk_index": int(payload.get("chunk_index") or 0),
+                            "content": str(payload.get("content") or ""),
+                            "keywords": list(payload.get("keywords") or []),
+                            "page": payload.get("page"),
+                            "section": payload.get("section"),
+                            "token_count": int(payload.get("token_count") or 0),
+                            "block_type": payload.get("block_type"),
+                            "heading_path": list(payload.get("heading_path") or []),
+                            "document_id": payload.get("document_id"),
+                            "document_name": payload.get("document_name"),
+                        }
+                    )
+                if next_offset is None or next_offset == offset:
+                    break
+                offset = next_offset
+        except Exception as error:
+            raise StorageError(message="Qdrant document chunks failed", details={"reason": str(error)}) from error
+        rows.sort(key=lambda item: (int(item.get("chunk_index") or 0), str(item.get("chunk_id") or "")))
+        return rows
+
     def iter_points(self, filters: dict | None = None, batch_size: int = 128) -> list[dict]:
         if not self._collection_exists():
             return []
