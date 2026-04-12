@@ -108,6 +108,7 @@ class IndexingRequest(BaseModel):
 class ChatCitation(BaseModel):
     document_id: str | None = None
     document_name: str | None = None
+    knowledge_base: str | None = None
     chunk_id: str | None = None
     page: int | None = None
     snippet: str | None = None

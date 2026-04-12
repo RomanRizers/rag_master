@@ -121,6 +121,7 @@ export type DocumentChunksResponse = {
 export type ChatCitation = {
   document_id?: string | null;
   document_name?: string | null;
+  knowledge_base?: string | null;
   chunk_id?: string | null;
   page?: number | null;
   snippet?: string | null;

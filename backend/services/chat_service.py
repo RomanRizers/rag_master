@@ -298,6 +298,7 @@ def _build_citations(search_results: list[dict]) -> list[dict]:
             {
                 "document_id": payload.get("document_id"),
                 "document_name": payload.get("document_name"),
+                "knowledge_base": payload.get("knowledge_base"),
                 "chunk_id": str(item.get("id")) if item.get("id") is not None else None,
                 "page": payload.get("page"),
                 "snippet": content[:280] if content else None,

@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiRequestError } from "../api/client";
@@ -93,7 +94,11 @@ describe("ChatPage", () => {
       ]
     };
 
-    const markup = renderToStaticMarkup(<ChatPage />);
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <ChatPage />
+      </MemoryRouter>
+    );
 
     expect(markup).toContain("12345678");
     expect(markup).toContain("Что в политике отпусков?");
@@ -108,7 +113,11 @@ describe("ChatPage", () => {
     queryState.messages = undefined;
     queryState.sessionsError = new ApiRequestError("provider unavailable", "llm_unavailable");
 
-    const markup = renderToStaticMarkup(<ChatPage />);
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <ChatPage />
+      </MemoryRouter>
+    );
 
     expect(markup).toContain("LLM недоступна");
     expect(markup).toContain("llm_unavailable");

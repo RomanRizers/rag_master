@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
   createKnowledgeBase,
@@ -113,6 +113,7 @@ export function DocumentsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const params = useParams<{ datasetName?: string; documentId?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [file, setFile] = useState<File | null>(null);
   const [isCreateKnowledgeBaseOpen, setIsCreateKnowledgeBaseOpen] = useState(false);
@@ -297,6 +298,8 @@ export function DocumentsPage() {
   }, [knowledgeBases, params.datasetName]);
 
   const activeDocumentId = params.documentId ?? "";
+  const highlightedChunkId = searchParams.get("chunk") ?? "";
+  const highlightText = searchParams.get("highlight") ?? "";
   const selectedDatasetInfo = knowledgeBases.find((item) => item.name === activeKnowledgeBase) ?? null;
   const selectedDocuments = useMemo(
     () => [...(documentsByKnowledgeBase.get(activeKnowledgeBase) ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)),
@@ -363,6 +366,16 @@ export function DocumentsPage() {
     setSelectedChunk(null);
     setChunkSearch("");
   }, [activeDocumentId]);
+
+  useEffect(() => {
+    if (!highlightedChunkId || !documentChunksQuery.data?.chunks?.length) {
+      return;
+    }
+    const target = documentChunksQuery.data.chunks.find((chunk) => chunk.chunk_id === highlightedChunkId);
+    if (target) {
+      setSelectedChunk(target);
+    }
+  }, [documentChunksQuery.data?.chunks, highlightedChunkId]);
 
   const selectedJobs = useMemo(() => {
     return jobs.filter((job) => {
@@ -824,7 +837,7 @@ export function DocumentsPage() {
             {visibleChunks.map((chunk) => (
               <article
                 key={chunk.chunk_id}
-                className="dataset-chunk-card"
+                className={`dataset-chunk-card ${highlightedChunkId === chunk.chunk_id ? "is-highlighted" : ""}`}
                 role="button"
                 tabIndex={0}
                 onClick={() => setSelectedChunk(chunk)}
@@ -1022,14 +1035,23 @@ export function DocumentsPage() {
                   {selectedChunk.section ? ` · ${selectedChunk.section}` : ""}
                 </p>
               </div>
-              <button type="button" className="overlay-close" onClick={() => setSelectedChunk(null)}>
+              <button
+                type="button"
+                className="overlay-close"
+                onClick={() => {
+                  setSelectedChunk(null);
+                  if (highlightedChunkId) {
+                    setSearchParams({});
+                  }
+                }}
+              >
                 ×
               </button>
             </div>
             <div className="chunk-modal-body">
               <section className="chunk-content-panel">
                 <span className="meta-label">Chunk</span>
-                <div className="chunk-content-box">{selectedChunk.content}</div>
+                <div className="chunk-content-box">{renderHighlightedText(selectedChunk.content, highlightText)}</div>
               </section>
               <section className="chunk-keywords-panel">
                 <span className="meta-label">Keywords</span>
@@ -1058,5 +1080,28 @@ export function DocumentsPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function renderHighlightedText(text: string, highlighted: string) {
+  const needle = highlighted.trim();
+  if (!needle || needle.length < 4) {
+    return text;
+  }
+  const normalizedNeedle = needle.replace(/\s+/g, " ").trim().toLowerCase();
+  const normalizedText = text.replace(/\s+/g, " ");
+  const start = normalizedText.toLowerCase().indexOf(normalizedNeedle);
+  if (start < 0) {
+    return text;
+  }
+  const before = normalizedText.slice(0, start);
+  const match = normalizedText.slice(start, start + normalizedNeedle.length);
+  const after = normalizedText.slice(start + normalizedNeedle.length);
+  return (
+    <>
+      {before}
+      <mark className="text-highlight">{match}</mark>
+      {after}
+    </>
   );
 }
