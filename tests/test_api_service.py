@@ -6,7 +6,7 @@ from backend.services.api_service import ApiService
 
 
 class ApiServiceTestCase(unittest.TestCase):
-    def test_search_query_lowercases_keywords_and_returns_total(self):
+    def test_search_query_expands_query_and_returns_debug(self):
         mock_vectorizer = Mock()
         mock_vectorizer.vectorize_text.return_value = [0.1, 0.2]
 
@@ -14,10 +14,23 @@ class ApiServiceTestCase(unittest.TestCase):
         mock_qdrant.search.return_value = [{"id": "a"}, {"id": "b"}]
 
         service = ApiService(qdrant_service=mock_qdrant, vectorizer=mock_vectorizer)
-        result = service.search_query("hello", top_k=2, keywords=["One", "Two"])
+        result = service.search_query("ЗРА гост 123", top_k=2, keywords=["One", "Two"])
 
         self.assertEqual(result["total"], 2)
-        mock_qdrant.search.assert_called_once_with([0.1, 0.2], 2, ["one", "two"], filters=None)
+        self.assertIn("debug", result)
+        self.assertIn("expanded_terms", result["debug"])
+        self.assertIn("123", result["debug"]["exact_identifiers"])
+        mock_vectorizer.vectorize_text.assert_called_once()
+        called_query = mock_vectorizer.vectorize_text.call_args.args[0]
+        self.assertIn("Синонимы и расширения запроса", called_query)
+        mock_qdrant.search.assert_called_once()
+        args, kwargs = mock_qdrant.search.call_args
+        self.assertEqual(args[0], [0.1, 0.2])
+        self.assertGreaterEqual(args[1], 2)
+        self.assertEqual(args[2], ["one", "two"])
+        self.assertEqual(kwargs["filters"], None)
+        self.assertIn("one", kwargs["lexical_terms"])
+        self.assertIn("зра", kwargs["lexical_terms"])
 
     def test_search_query_wraps_vectorizer_error(self):
         mock_vectorizer = Mock()

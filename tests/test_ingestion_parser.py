@@ -34,6 +34,7 @@ class ParserTestCase(unittest.TestCase):
         blocks = parse_document("sample.txt", "text/plain", b" hello\nworld ")
         self.assertEqual(len(blocks), 1)
         self.assertEqual(blocks[0]["text"], "hello world")
+        self.assertEqual(blocks[0]["block_type"], "paragraph")
 
     def test_parse_docx(self):
         content = _make_docx_bytes(["Первый абзац", "Второй абзац"])
@@ -45,6 +46,7 @@ class ParserTestCase(unittest.TestCase):
         self.assertEqual(len(blocks), 2)
         self.assertEqual(blocks[0]["text"], "Первый абзац")
         self.assertEqual(blocks[1]["text"], "Второй абзац")
+        self.assertEqual(blocks[0]["heading_path"], [])
 
     def test_parse_docx_extracts_headings_and_tables(self):
         content = _make_docx_xml_bytes(
@@ -67,11 +69,16 @@ class ParserTestCase(unittest.TestCase):
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             content,
         )
-        self.assertEqual(blocks[0]["text"], "[SECTION H1] Документ")
+        self.assertEqual(blocks[0]["text"], "Документ")
+        self.assertEqual(blocks[0]["block_type"], "heading")
+        self.assertEqual(blocks[0]["heading_path"], ["Документ"])
         self.assertEqual(blocks[1]["text"], "Вводный текст")
         self.assertEqual(blocks[1]["section"], "Документ")
-        self.assertEqual(blocks[2]["text"], "[TABLE] A1 | B1")
+        self.assertEqual(blocks[1]["heading_path"], ["Документ"])
+        self.assertEqual(blocks[2]["text"], "A1 | B1")
         self.assertEqual(blocks[2]["section"], "Документ")
+        self.assertEqual(blocks[2]["block_type"], "table_row")
+        self.assertTrue(blocks[2]["is_table_like"])
 
     def test_parse_pdf_without_dependency_raises_parsing_error(self):
         with self.assertRaises(ParsingError) as context:
@@ -87,6 +94,7 @@ class ChunkerTestCase(unittest.TestCase):
         self.assertEqual(chunks[0]["page"], 1)
         self.assertEqual(chunks[0]["chunk_index"], 0)
         self.assertEqual(chunks[0]["token_count"], 100)
+        self.assertIn("block_types", chunks[0])
 
     def test_chunk_blocks_ignores_empty_items(self):
         chunks = chunk_blocks(
@@ -96,6 +104,31 @@ class ChunkerTestCase(unittest.TestCase):
         )
         self.assertEqual(len(chunks), 1)
         self.assertEqual(chunks[0]["content"], "ok")
+
+    def test_chunk_blocks_keeps_heading_with_following_content(self):
+        chunks = chunk_blocks(
+            [
+                {"text": "Раздел 1", "block_type": "heading", "heading_path": ["Раздел 1"], "page": 1, "section": "Раздел 1"},
+                {"text": "Основной технический текст", "block_type": "paragraph", "heading_path": ["Раздел 1"], "page": 1, "section": "Раздел 1"},
+            ],
+            chunk_size_tokens=100,
+            chunk_overlap_tokens=10,
+        )
+        self.assertEqual(len(chunks), 1)
+        self.assertIn("Раздел 1", chunks[0]["content"])
+        self.assertIn("Основной технический текст", chunks[0]["content"])
+
+    def test_chunk_blocks_separates_table_rows(self):
+        chunks = chunk_blocks(
+            [
+                {"text": "A1 | B1", "block_type": "table_row", "heading_path": [], "page": 1, "section": "T"},
+                {"text": "A2 | B2", "block_type": "table_row", "heading_path": [], "page": 1, "section": "T"},
+            ],
+            chunk_size_tokens=100,
+            chunk_overlap_tokens=10,
+        )
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual(chunks[0]["block_type"], "table_row")
 
     def test_chunk_blocks_validates_overlap(self):
         with self.assertRaises(ValueError):

@@ -1,7 +1,10 @@
+import structlog
+
+from backend.core.config import Config
 from backend.core.exceptions import StorageError, VectorizationError
 from backend.infrastructure.ml.vectorizer import TextVectorizer
 from backend.infrastructure.qdrant.client import QdrantService
-import structlog
+from backend.services.query_normalization import normalize_query
 
 logger = structlog.get_logger("api_service")
 
@@ -12,24 +15,31 @@ class ApiService:
 
     def search_query(self, query: str, top_k: int, keywords: list = None, filters: dict | None = None):
         """Выполняет поиск по запросу и возвращает результаты."""
-        if keywords:
-            keywords = [kw.lower() for kw in keywords]
+        normalized_query = normalize_query(query)
+        explicit_keywords = _dedupe([kw.lower() for kw in (keywords or [])])
+        lexical_terms = _dedupe([*explicit_keywords, *normalized_query["expanded_terms"]])
         logger.info(
             "search_query_started",
             query_length=len(query),
             top_k=top_k,
-            keywords_count=len(keywords) if keywords else 0,
+            keywords_count=len(lexical_terms),
         )
 
         try:
-            query_vector = self.vectorizer.vectorize_text(query)
+            query_vector = self.vectorizer.vectorize_text(normalized_query["expanded_query"])
         except VectorizationError:
             raise
         except Exception as error:
             raise VectorizationError(details={"reason": str(error)}) from error
 
         try:
-            search_results = self.qdrant_service.search(query_vector, top_k, keywords, filters=filters)
+            search_results = self.qdrant_service.search(
+                query_vector,
+                max(top_k, Config.FUSED_RETRIEVE_TOP_N),
+                explicit_keywords,
+                filters=filters,
+                lexical_terms=lexical_terms,
+            )
         except StorageError:
             raise
         except Exception as error:
@@ -39,7 +49,12 @@ class ApiService:
 
         return {
             "results": search_results,
-            "total": len(search_results)
+            "total": len(search_results),
+            "debug": {
+                "normalized_query": normalized_query["normalized_query"],
+                "expanded_terms": normalized_query["expanded_terms"],
+                "exact_identifiers": normalized_query["exact_identifiers"],
+            },
         }
 
     def index_documents(self, document_name: str, documents: list):
@@ -139,3 +154,15 @@ class ApiService:
             ) from error
         logger.info("get_document_index_summary_finished", document_id=document_id, chunks_count=summary.get("chunks_count"))
         return summary
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen = set()
+    items: list[str] = []
+    for value in values:
+        normalized = str(value).strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        items.append(normalized)
+    return items

@@ -1,12 +1,22 @@
 import unittest
 from unittest.mock import patch
 
-from backend.services.chat_service import _apply_search_filters, _build_context, _select_context_results
+from backend.services.chat_service import (
+    NO_ANSWER_MESSAGE,
+    _apply_search_filters,
+    _build_context,
+    _compress_history,
+    _select_context_results,
+    _should_return_no_answer,
+)
 
 
 class ChatServiceRankingTestCase(unittest.TestCase):
     @patch("backend.services.chat_service.Config.RERANK_TOP_N", 2)
     @patch("backend.services.chat_service.Config.RERANK_SEMANTIC_WEIGHT", 0.3)
+    @patch("backend.services.chat_service.Config.RERANK_LEXICAL_WEIGHT", 0.5)
+    @patch("backend.services.chat_service.Config.RERANK_KEYWORD_WEIGHT", 0.15)
+    @patch("backend.services.chat_service.Config.RERANK_METADATA_WEIGHT", 0.05)
     def test_rerank_prioritizes_lexical_match_when_weighted(self):
         results = [
             {
@@ -42,12 +52,40 @@ class ChatServiceRankingTestCase(unittest.TestCase):
 
     def test_build_context_respects_character_budget(self):
         results = [
-            {"id": "a", "payload": {"content": "a" * 100}},
-            {"id": "b", "payload": {"content": "b" * 100}},
+            {"id": "a", "payload": {"content": "a " * 100, "token_count": 100}},
+            {"id": "b", "payload": {"content": "b " * 100, "token_count": 100}},
         ]
         context = _build_context(results, max_chars=120)
         self.assertIn("[1]", context)
         self.assertNotIn("[2]", context)
+
+    def test_build_context_skips_duplicates(self):
+        results = [
+            {"id": "a", "payload": {"document_id": "d1", "page": 1, "section": "S", "content": "same", "token_count": 1}},
+            {"id": "b", "payload": {"document_id": "d1", "page": 1, "section": "S", "content": "same", "token_count": 1}},
+        ]
+        context = _build_context(results, max_chars=10)
+        self.assertEqual(context.count("[1]"), 1)
+        self.assertNotIn("[2]", context)
+
+    @patch("backend.services.chat_service.Config.CHAT_HISTORY_MAX_MESSAGES", 2)
+    def test_compress_history_keeps_recent_turns(self):
+        history = [
+            {"role": "system", "content": "ignored"},
+            {"role": "user", "content": "u1"},
+            {"role": "assistant", "content": "a1"},
+            {"role": "user", "content": "u2"},
+        ]
+        compressed = _compress_history(history)
+        self.assertEqual([item["content"] for item in compressed], ["a1", "u2"])
+
+    @patch("backend.services.chat_service.Config.CHAT_MIN_RESULTS_REQUIRED", 1)
+    @patch("backend.services.chat_service.Config.CHAT_MIN_RERANK_SCORE", 0.5)
+    def test_should_return_no_answer_uses_rerank_threshold(self):
+        self.assertTrue(_should_return_no_answer([]))
+        self.assertTrue(_should_return_no_answer([{"rerank_score": 0.3}]))
+        self.assertFalse(_should_return_no_answer([{"rerank_score": 0.7}]))
+        self.assertTrue(NO_ANSWER_MESSAGE.startswith("Ответ, который вы ищете"))
 
     def test_apply_search_filters_by_document_name(self):
         results = [

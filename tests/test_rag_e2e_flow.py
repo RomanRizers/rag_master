@@ -40,15 +40,24 @@ class _FakeQdrantService:
             }
         )
 
-    def search(self, query_vector, top_k, keywords=None):
+    def search(self, query_vector, top_k, keywords=None, filters=None, lexical_terms=None):
         query_vector = np.array(query_vector, dtype=float)
         rows = []
         for row in self._rows:
             payload = row["payload"]
             row_keywords = set(str(item).lower() for item in payload.get("keywords") or [])
+            if filters and filters.get("knowledge_bases"):
+                current_base = str(payload.get("knowledge_base") or "")
+                if current_base not in set(filters.get("knowledge_bases") or []):
+                    continue
             if keywords:
                 needed = set(str(item).lower() for item in keywords)
-                if not needed.issubset(row_keywords):
+                if not needed.intersection(row_keywords):
+                    continue
+            elif lexical_terms:
+                needed = set(str(item).lower() for item in lexical_terms)
+                content_tokens = set(str(payload.get("content") or "").lower().replace(".", "").split())
+                if not needed.intersection(content_tokens):
                     continue
             score = float(np.dot(row["vector"], query_vector))
             rows.append({"id": row["id"], "score": score, "payload": payload})

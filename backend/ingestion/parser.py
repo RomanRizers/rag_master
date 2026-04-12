@@ -22,7 +22,19 @@ def parse_document(file_name: str, mime_type: str, content: bytes) -> list[dict[
 
     if mime in TEXT_MIME_TYPES or file_name.lower().endswith(".txt"):
         text = _normalize_text(content.decode("utf-8", errors="replace"))
-        return _ensure_non_empty([{"text": text, "page": None, "section": None}])
+        return _ensure_non_empty(
+            [
+                {
+                    "text": text,
+                    "page": None,
+                    "section": None,
+                    "block_type": "paragraph",
+                    "heading_level": None,
+                    "heading_path": [],
+                    "is_table_like": False,
+                }
+            ]
+        )
 
     if mime in DOCX_MIME_TYPES or file_name.lower().endswith(".docx"):
         return _parse_docx(content)
@@ -50,6 +62,7 @@ def _parse_docx(content: bytes) -> list[dict[str, Any]]:
     namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
     blocks: list[dict[str, Any]] = []
     current_section: str | None = None
+    heading_stack: list[str] = []
 
     body = root.find(".//w:body", namespace)
     if body is None:
@@ -65,16 +78,32 @@ def _parse_docx(content: bytes) -> list[dict[str, Any]]:
             heading_level = _extract_heading_level(element, namespace)
             if heading_level is not None:
                 current_section = paragraph_text
+                heading_stack = heading_stack[: max(heading_level - 1, 0)]
+                heading_stack.append(paragraph_text)
                 blocks.append(
                     {
-                        "text": f"[SECTION H{heading_level}] {paragraph_text}",
+                        "text": paragraph_text,
                         "page": None,
                         "section": current_section,
+                        "block_type": "heading",
+                        "heading_level": heading_level,
+                        "heading_path": list(heading_stack),
+                        "is_table_like": False,
                     }
                 )
                 continue
 
-            blocks.append({"text": paragraph_text, "page": None, "section": current_section})
+            blocks.append(
+                {
+                    "text": paragraph_text,
+                    "page": None,
+                    "section": current_section,
+                    "block_type": "paragraph",
+                    "heading_level": None,
+                    "heading_path": list(heading_stack),
+                    "is_table_like": False,
+                }
+            )
 
         if tag == "tbl":
             rows = _extract_table_rows(element, namespace)
@@ -82,7 +111,17 @@ def _parse_docx(content: bytes) -> list[dict[str, Any]]:
                 if not row:
                     continue
                 row_text = " | ".join(row)
-                blocks.append({"text": f"[TABLE] {row_text}", "page": None, "section": current_section})
+                blocks.append(
+                    {
+                        "text": row_text,
+                        "page": None,
+                        "section": current_section,
+                        "block_type": "table_row",
+                        "heading_level": None,
+                        "heading_path": list(heading_stack),
+                        "is_table_like": True,
+                    }
+                )
 
     return _ensure_non_empty(blocks)
 
@@ -104,7 +143,17 @@ def _parse_pdf(content: bytes) -> list[dict[str, Any]]:
             text = _normalize_text(page.extract_text() or "")
             if not text:
                 continue
-            pages.append({"text": text, "page": index, "section": None})
+            pages.append(
+                {
+                    "text": text,
+                    "page": index,
+                    "section": None,
+                    "block_type": "paragraph",
+                    "heading_level": None,
+                    "heading_path": [],
+                    "is_table_like": _looks_table_like(text),
+                }
+            )
     except Exception as exc:
         raise ParsingError(message="Unable to parse PDF document", code="parsing_failed") from exc
 
@@ -119,6 +168,10 @@ def _ensure_non_empty(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         normalized_item = dict(item)
         normalized_item["text"] = text
+        normalized_item.setdefault("block_type", "paragraph")
+        normalized_item.setdefault("heading_level", None)
+        normalized_item.setdefault("heading_path", [])
+        normalized_item.setdefault("is_table_like", False)
         filtered.append(normalized_item)
     if not filtered:
         raise ParsingError(message="No readable text found in document", code="parsing_failed")
@@ -177,3 +230,9 @@ def _local_name(tag: str) -> str:
     if "}" in tag:
         return tag.rsplit("}", maxsplit=1)[1]
     return tag
+
+
+def _looks_table_like(text: str) -> bool:
+    separators = text.count("|") + text.count(";") + text.count("\t")
+    digit_ratio = sum(char.isdigit() for char in text) / max(len(text), 1)
+    return separators >= 3 or digit_ratio > 0.2

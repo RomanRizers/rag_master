@@ -1,11 +1,15 @@
-from qdrant_client.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, PointStruct, VectorParams
+import uuid
+import re
+
+import structlog
 import qdrant_client
+from qdrant_client.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, PointStruct, VectorParams
+
 from backend.core.config import Config
 from backend.core.exceptions import StorageError
-import uuid
-import structlog
 
 logger = structlog.get_logger("qdrant")
+_TOKEN_RE = re.compile(r"[a-zA-Zа-яА-ЯёЁ0-9]+")
 
 
 class QdrantService:
@@ -15,59 +19,35 @@ class QdrantService:
         self.collection_name = Config.COLLECTION_NAME
         logger.info("qdrant_client_initialized", qdrant_url=Config.QDRANT_URL, collection_name=self.collection_name)
 
-    def search(self, query_vector, top_k, keywords=None, filters=None):
-        """Выполняет поиск в коллекции с использованием вектора запроса и фильтрации."""
-        must_conditions = []
-        if keywords:
-            if isinstance(keywords, str):
-                keywords = [keywords.lower()]
-            else:
-                keywords = [kw.lower() for kw in keywords]
-            must_conditions.append(
-                FieldCondition(
-                    key="keywords",
-                    match=MatchAny(any=keywords)
-                )
-            )
-        knowledge_bases = filters.get("knowledge_bases") if isinstance(filters, dict) else None
-        if knowledge_bases:
-            must_conditions.append(
-                FieldCondition(
-                    key="knowledge_base",
-                    match=MatchAny(any=[str(item).strip() for item in knowledge_bases if str(item).strip()])
-                )
-            )
-        query_filter = Filter(must=must_conditions) if must_conditions else None
-        logger.info("qdrant_search_started", top_k=top_k, keywords_count=len(keywords) if keywords else 0)
+    def search(self, query_vector, top_k, keywords=None, filters=None, lexical_terms=None):
+        """Выполняет hybrid retrieval: dense + lexical fusion."""
+        normalized_keywords = _normalize_keywords(keywords)
+        normalized_lexical_terms = _normalize_keywords(lexical_terms) or normalized_keywords
+        query_filter = _build_query_filter(normalized_keywords, filters)
+        logger.info("qdrant_search_started", top_k=top_k, keywords_count=len(normalized_keywords))
 
-        try:
-            if hasattr(self.client, "query_points"):
-                response = self.client.query_points(
-                    collection_name=self.collection_name,
-                    query=query_vector,
-                    query_filter=query_filter,
-                    limit=top_k,
-                )
-                search_result = response.points
-            else:
-                search_result = self.client.search(
-                    collection_name=self.collection_name,
-                    query_vector=query_vector,
-                    query_filter=query_filter,
-                    limit=top_k,
-                )
-        except Exception as error:
-            raise StorageError(message="Qdrant search failed", details={"reason": str(error)}) from error
-        logger.info("qdrant_search_finished", results_count=len(search_result))
-
-        return [
-            {
-                "id": hit.id,
-                "payload": hit.payload,
-                "score": hit.score
-            }
-            for hit in search_result
-        ]
+        dense_results = self._dense_search(
+            query_vector,
+            limit=max(top_k, Config.DENSE_RETRIEVE_TOP_N),
+            query_filter=query_filter,
+        )
+        lexical_results = self._lexical_search(
+            filters=filters,
+            keywords=normalized_lexical_terms,
+            limit=max(top_k, Config.SPARSE_RETRIEVE_TOP_N),
+        )
+        search_result = _fuse_ranked_results(
+            dense_results=dense_results,
+            lexical_results=lexical_results,
+            limit=max(top_k, Config.FUSED_RETRIEVE_TOP_N),
+        )
+        logger.info(
+            "qdrant_search_finished",
+            results_count=len(search_result),
+            dense_count=len(dense_results),
+            lexical_count=len(lexical_results),
+        )
+        return search_result[:top_k]
 
     def index_document(self, document_name, content_vector, content, keywords, dataframe=None, metadata=None):
         """Индексирует документ в коллекции Qdrant."""
@@ -245,6 +225,69 @@ class QdrantService:
             "index_profile": index_profile,
         }
 
+    def iter_points(self, filters: dict | None = None, batch_size: int = 128) -> list[dict]:
+        if not self._collection_exists():
+            return []
+        offset = None
+        rows: list[dict] = []
+        query_filter = _build_query_filter(None, filters)
+        try:
+            while True:
+                points, next_offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=query_filter,
+                    limit=batch_size,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                for point in points:
+                    rows.append(
+                        {
+                            "id": point.id,
+                            "payload": getattr(point, "payload", None) or {},
+                        }
+                    )
+                if next_offset is None or next_offset == offset:
+                    break
+                offset = next_offset
+        except Exception as error:
+            raise StorageError(message="Qdrant scroll failed", details={"reason": str(error)}) from error
+        return rows
+
+    def _dense_search(self, query_vector, *, limit: int, query_filter: Filter | None) -> list[dict]:
+        try:
+            if hasattr(self.client, "query_points"):
+                response = self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=query_vector,
+                    query_filter=query_filter,
+                    limit=limit,
+                )
+                hits = response.points
+            else:
+                hits = self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_vector,
+                    query_filter=query_filter,
+                    limit=limit,
+                )
+        except Exception as error:
+            raise StorageError(message="Qdrant dense search failed", details={"reason": str(error)}) from error
+        return [{"id": hit.id, "payload": hit.payload, "score": float(hit.score)} for hit in hits]
+
+    def _lexical_search(self, *, filters: dict | None, keywords: list[str], limit: int) -> list[dict]:
+        rows = self.iter_points(filters=filters, batch_size=128)
+        ranked: list[dict] = []
+        for row in rows:
+            payload = row.get("payload") or {}
+            lexical_score = _lexical_score_for_payload(keywords, payload)
+            if lexical_score <= 0:
+                continue
+            ranked.append({"id": row["id"], "payload": payload, "score": lexical_score})
+        ranked.sort(key=lambda item: item["score"], reverse=True)
+        return ranked[:limit]
+
     def _ensure_collection(self, vector_size: int):
         if self._collection_exists():
             return
@@ -272,3 +315,68 @@ def _top_keywords(counts: dict[str, int], limit: int) -> list[str]:
         keyword
         for keyword, _ in sorted(counts.items(), key=lambda item: (-item[1], len(item[0]), item[0]))[:limit]
     ]
+
+
+def _normalize_keywords(keywords) -> list[str]:
+    if not keywords:
+        return []
+    if isinstance(keywords, str):
+        return [keywords.strip().lower()] if keywords.strip() else []
+    return [str(keyword).strip().lower() for keyword in keywords if str(keyword).strip()]
+
+
+def _build_query_filter(keywords: list[str] | None, filters: dict | None) -> Filter | None:
+    must_conditions = []
+    if keywords:
+        must_conditions.append(FieldCondition(key="keywords", match=MatchAny(any=keywords)))
+    knowledge_bases = filters.get("knowledge_bases") if isinstance(filters, dict) else None
+    if knowledge_bases:
+        must_conditions.append(
+            FieldCondition(
+                key="knowledge_base",
+                match=MatchAny(any=[str(item).strip() for item in knowledge_bases if str(item).strip()]),
+            )
+        )
+    return Filter(must=must_conditions) if must_conditions else None
+
+
+def _fuse_ranked_results(*, dense_results: list[dict], lexical_results: list[dict], limit: int) -> list[dict]:
+    fused: dict[str, dict] = {}
+    for rank, item in enumerate(dense_results, start=1):
+        key = str(item["id"])
+        fused.setdefault(key, {"id": item["id"], "payload": item.get("payload") or {}, "score": 0.0, "score_details": {}})
+        fused[key]["score"] += 1.0 / (60 + rank)
+        fused[key]["score_details"]["dense_rank"] = rank
+        fused[key]["score_details"]["dense_score"] = item.get("score")
+    for rank, item in enumerate(lexical_results, start=1):
+        key = str(item["id"])
+        fused.setdefault(key, {"id": item["id"], "payload": item.get("payload") or {}, "score": 0.0, "score_details": {}})
+        fused[key]["score"] += 1.0 / (60 + rank)
+        fused[key]["score_details"]["lexical_rank"] = rank
+        fused[key]["score_details"]["lexical_score"] = item.get("score")
+    return sorted(fused.values(), key=lambda item: float(item.get("score") or 0.0), reverse=True)[:limit]
+
+
+def _lexical_score_for_payload(query_terms: list[str], payload: dict) -> float:
+    if not query_terms:
+        return 0.0
+    corpus_parts = [
+        str(payload.get("content") or ""),
+        str(payload.get("document_name") or ""),
+        str(payload.get("section") or ""),
+        " ".join(str(item) for item in (payload.get("keywords") or [])),
+        " ".join(str(item) for item in (payload.get("document_keywords") or [])),
+        " ".join(str(item) for item in (payload.get("heading_path") or [])),
+    ]
+    corpus_text = " ".join(part for part in corpus_parts if part).lower()
+    corpus_tokens = set(_TOKEN_RE.findall(corpus_text))
+    if not corpus_tokens:
+        return 0.0
+    matched = 0.0
+    for term in query_terms:
+        term_tokens = _TOKEN_RE.findall(term.lower())
+        if not term_tokens:
+            continue
+        if all(token in corpus_tokens for token in term_tokens):
+            matched += 1.5 if len(term_tokens) > 1 else 1.0
+    return matched / float(max(len(query_terms), 1))
