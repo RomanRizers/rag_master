@@ -7,6 +7,8 @@ def chunk_blocks(
     blocks: list[dict[str, Any]],
     chunk_size_tokens: int = 600,
     chunk_overlap_tokens: int = 120,
+    *,
+    tokenizer=None,
 ) -> list[dict[str, Any]]:
     if chunk_size_tokens <= 0:
         raise ValueError("chunk_size_tokens must be > 0")
@@ -23,7 +25,7 @@ def chunk_blocks(
         if not text:
             continue
 
-        tokens = text.split()
+        tokens = _tokenize_block(text, tokenizer)
         if not tokens:
             continue
 
@@ -34,7 +36,7 @@ def chunk_blocks(
         while start < len(tokens):
             end = min(len(tokens), start + chunk_size_tokens)
             fragment_tokens = tokens[start:end]
-            fragment = " ".join(fragment_tokens).strip()
+            fragment = _decode_fragment(fragment_tokens, tokenizer).strip()
 
             if fragment:
                 chunks.append(
@@ -54,3 +56,15 @@ def chunk_blocks(
             start = end - chunk_overlap_tokens
 
     return chunks
+
+
+def _tokenize_block(text: str, tokenizer) -> list[Any]:
+    if tokenizer is None:
+        return text.split()
+    return tokenizer.encode(text, add_special_tokens=False)
+
+
+def _decode_fragment(tokens: list[Any], tokenizer) -> str:
+    if tokenizer is None:
+        return " ".join(str(token) for token in tokens)
+    return tokenizer.decode(tokens, skip_special_tokens=True)

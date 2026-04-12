@@ -155,6 +155,12 @@ export type ChatSendMessageResponse = {
 export type KnowledgeBaseItem = {
   name: string;
   document_count: number;
+  created_at?: string | null;
+  profile_mode: "precision" | "balanced" | "recall" | string;
+  chunk_size_tokens: number;
+  chunk_overlap_tokens: number;
+  chunk_keyword_limit: number;
+  document_keyword_limit: number;
 };
 
 export type KnowledgeBaseListResponse = {
@@ -164,4 +170,40 @@ export type KnowledgeBaseListResponse = {
 export type KnowledgeBaseCreateResponse = {
   name: string;
   document_count: number;
+  created_at?: string | null;
+  profile_mode: "precision" | "balanced" | "recall" | string;
+  chunk_size_tokens: number;
+  chunk_overlap_tokens: number;
+  chunk_keyword_limit: number;
+  document_keyword_limit: number;
+};
+
+export type KnowledgeBaseResponse = {
+  name: string;
+  document_count: number;
+  created_at?: string | null;
+  profile_mode: "precision" | "balanced" | "recall" | string;
+  chunk_size_tokens: number;
+  chunk_overlap_tokens: number;
+  chunk_keyword_limit: number;
+  document_keyword_limit: number;
+};
+
+export type KnowledgeBaseDeleteResponse = {
+  status: string;
+  knowledge_base: KnowledgeBaseResponse;
+};
+
+export type KnowledgeBaseUpdateRequest = {
+  name?: string;
+  profile_mode?: "precision" | "balanced" | "recall" | string;
+  chunk_size_tokens?: number;
+  chunk_overlap_tokens?: number;
+  chunk_keyword_limit?: number;
+  document_keyword_limit?: number;
+};
+
+export type KnowledgeBaseReindexResponse = {
+  knowledge_base: string;
+  queued_jobs: number;
 };

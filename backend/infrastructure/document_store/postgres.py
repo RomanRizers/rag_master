@@ -7,6 +7,7 @@ from threading import RLock
 import psycopg
 
 from backend.infrastructure.document_store.base import DocumentStore
+from backend.services.indexing_profiles import resolve_index_profile
 
 
 class PostgresDocumentStore(DocumentStore):
@@ -43,35 +44,146 @@ class PostgresDocumentStore(DocumentStore):
         return self.get_document(document["document_id"]) or dict(document)
 
     def create_knowledge_base(self, name: str) -> dict:
+        defaults = resolve_index_profile()
         query = """
-            INSERT INTO knowledge_bases(name)
-            VALUES (%s)
+            INSERT INTO knowledge_bases(
+                name, profile_mode, chunk_size_tokens, chunk_overlap_tokens, chunk_keyword_limit, document_keyword_limit
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (name) DO NOTHING
-            RETURNING name, created_at
+            RETURNING name, created_at, profile_mode, chunk_size_tokens, chunk_overlap_tokens, chunk_keyword_limit, document_keyword_limit
         """
         with self._lock, self._conn.cursor() as cursor:
-            cursor.execute(query, (name,))
+            cursor.execute(
+                query,
+                (
+                    name,
+                    defaults["profile_mode"],
+                    defaults["chunk_size_tokens"],
+                    defaults["chunk_overlap_tokens"],
+                    defaults["chunk_keyword_limit"],
+                    defaults["document_keyword_limit"],
+                ),
+            )
             row = cursor.fetchone()
             if row is None:
                 cursor.execute(
-                    "SELECT name, created_at FROM knowledge_bases WHERE name = %s",
+                    """
+                    SELECT name, created_at, profile_mode, chunk_size_tokens, chunk_overlap_tokens, chunk_keyword_limit, document_keyword_limit
+                    FROM knowledge_bases WHERE name = %s
+                    """,
                     (name,),
                 )
                 row = cursor.fetchone()
-        return {"name": row[0], "created_at": _to_iso(row[1])}
+        return _row_to_knowledge_base(row)
 
     def list_knowledge_bases(self) -> list[dict]:
         query = """
-            SELECT kb.name, COUNT(d.document_id) AS document_count
+            SELECT
+                kb.name,
+                kb.created_at,
+                kb.profile_mode,
+                kb.chunk_size_tokens,
+                kb.chunk_overlap_tokens,
+                kb.chunk_keyword_limit,
+                kb.document_keyword_limit,
+                COUNT(d.document_id) AS document_count
             FROM knowledge_bases kb
             LEFT JOIN documents d ON d.knowledge_base = kb.name
-            GROUP BY kb.name
+            GROUP BY
+                kb.name,
+                kb.created_at,
+                kb.profile_mode,
+                kb.chunk_size_tokens,
+                kb.chunk_overlap_tokens,
+                kb.chunk_keyword_limit,
+                kb.document_keyword_limit
             ORDER BY kb.name ASC
         """
         with self._lock, self._conn.cursor() as cursor:
             cursor.execute(query)
             rows = cursor.fetchall()
-        return [{"name": row[0], "document_count": int(row[1] or 0)} for row in rows]
+        items = []
+        for row in rows:
+            item = _row_to_knowledge_base(row[:7])
+            item["document_count"] = int(row[7] or 0)
+            items.append(item)
+        return items
+
+    def get_knowledge_base(self, name: str) -> dict | None:
+        query = """
+            SELECT name, created_at, profile_mode, chunk_size_tokens, chunk_overlap_tokens, chunk_keyword_limit, document_keyword_limit
+            FROM knowledge_bases
+            WHERE name = %s
+        """
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query, (name,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return _row_to_knowledge_base(row)
+
+    def rename_knowledge_base(self, current_name: str, new_name: str) -> dict | None:
+        with self._lock, self._conn.transaction(), self._conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT name FROM knowledge_bases WHERE name = %s",
+                (current_name,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            cursor.execute(
+                "SELECT name FROM knowledge_bases WHERE name = %s",
+                (new_name,),
+            )
+            if cursor.fetchone() is not None:
+                raise psycopg.errors.UniqueViolation(f"Knowledge base already exists: {new_name}")
+            cursor.execute(
+                "UPDATE knowledge_bases SET name = %s WHERE name = %s",
+                (new_name, current_name),
+            )
+            cursor.execute(
+                "UPDATE documents SET knowledge_base = %s WHERE knowledge_base = %s",
+                (new_name, current_name),
+            )
+        return self.get_knowledge_base(new_name)
+
+    def update_knowledge_base(self, name: str, changes: dict) -> dict | None:
+        allowed_fields = {
+            "profile_mode",
+            "chunk_size_tokens",
+            "chunk_overlap_tokens",
+            "chunk_keyword_limit",
+            "document_keyword_limit",
+        }
+        update_fields = [(key, value) for key, value in changes.items() if key in allowed_fields]
+        if not update_fields:
+            return self.get_knowledge_base(name)
+        assignments = ", ".join(f"{field} = %s" for field, _ in update_fields)
+        params = [value for _, value in update_fields] + [name]
+        query = f"UPDATE knowledge_bases SET {assignments} WHERE name = %s"
+        with self._lock, self._conn.cursor() as cursor:
+            cursor.execute(query, params)
+            if cursor.rowcount == 0:
+                return None
+        return self.get_knowledge_base(name)
+
+    def delete_knowledge_base(self, name: str) -> dict | None:
+        with self._lock, self._conn.transaction(), self._conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*) FROM documents WHERE knowledge_base = %s",
+                (name,),
+            )
+            if int((cursor.fetchone() or [0])[0] or 0) > 0:
+                raise psycopg.errors.CheckViolation(f"Knowledge base not empty: {name}")
+            cursor.execute(
+                "DELETE FROM knowledge_bases WHERE name = %s RETURNING name",
+                (name,),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return {"name": row[0]}
 
     def get_document(self, document_id: str) -> dict | None:
         query = """
@@ -130,6 +242,25 @@ def _row_to_document(row: tuple) -> dict:
         "knowledge_base": row[7] or "default",
         "created_at": _to_iso(row[8]),
         "object_key": row[9],
+    }
+
+
+def _row_to_knowledge_base(row: tuple) -> dict:
+    defaults = resolve_index_profile(
+        row[2] if len(row) > 2 else None,
+        chunk_size_tokens=row[3] if len(row) > 3 else None,
+        chunk_overlap_tokens=row[4] if len(row) > 4 else None,
+        chunk_keyword_limit=row[5] if len(row) > 5 else None,
+        document_keyword_limit=row[6] if len(row) > 6 else None,
+    )
+    return {
+        "name": row[0],
+        "created_at": _to_iso(row[1] if len(row) > 1 else None),
+        "profile_mode": defaults["profile_mode"],
+        "chunk_size_tokens": int(defaults["chunk_size_tokens"]),
+        "chunk_overlap_tokens": int(defaults["chunk_overlap_tokens"]),
+        "chunk_keyword_limit": int(defaults["chunk_keyword_limit"]),
+        "document_keyword_limit": int(defaults["document_keyword_limit"]),
     }
 
 

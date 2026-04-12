@@ -275,6 +275,12 @@ class DocumentListResponse(BaseModel):
 class KnowledgeBaseListItem(BaseModel):
     name: str
     document_count: int
+    created_at: str | None = None
+    profile_mode: str
+    chunk_size_tokens: int
+    chunk_overlap_tokens: int
+    chunk_keyword_limit: int
+    document_keyword_limit: int
 
 
 class KnowledgeBaseListResponse(BaseModel):
@@ -288,6 +294,46 @@ class KnowledgeBaseCreateRequest(BaseModel):
 class KnowledgeBaseCreateResponse(BaseModel):
     name: str
     document_count: int
+    created_at: str | None = None
+    profile_mode: str
+    chunk_size_tokens: int
+    chunk_overlap_tokens: int
+    chunk_keyword_limit: int
+    document_keyword_limit: int
+
+
+class KnowledgeBaseRenameRequest(BaseModel):
+    name: str | None = None
+    profile_mode: str | None = None
+    chunk_size_tokens: int | None = None
+    chunk_overlap_tokens: int | None = None
+    chunk_keyword_limit: int | None = None
+    document_keyword_limit: int | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def validate_optional_name(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("name must be a non-empty string")
+        return value.strip()
+
+
+class KnowledgeBaseResponse(BaseModel):
+    name: str
+    document_count: int
+    created_at: str | None = None
+    profile_mode: str
+    chunk_size_tokens: int
+    chunk_overlap_tokens: int
+    chunk_keyword_limit: int
+    document_keyword_limit: int
+
+
+class KnowledgeBaseReindexResponse(BaseModel):
+    knowledge_base: str
+    queued_jobs: int
 
 
 class SearchFilters(BaseModel):

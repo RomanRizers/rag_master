@@ -13,6 +13,22 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def rename_knowledge_base(self, current_name: str, new_name: str) -> dict | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def delete_knowledge_base(self, name: str) -> dict | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_knowledge_base(self, name: str, changes: dict) -> dict | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_knowledge_base(self, name: str) -> dict | None:
+        raise NotImplementedError
+
+    @abstractmethod
     def create_document(self, document: dict) -> dict:
         raise NotImplementedError
 

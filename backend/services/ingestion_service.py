@@ -10,6 +10,7 @@ from backend.core.config import Config
 from backend.core.exceptions import ApiError, DocumentError, ParsingError
 from backend.infrastructure.job_store import JobStore, create_job_store
 from backend.ingestion import chunk_blocks, parse_document
+from backend.ingestion.keywords import extract_chunk_keywords, extract_document_keywords
 from backend.services.api_service import ApiService
 from backend.services.document_service import DocumentService
 
@@ -54,6 +55,17 @@ class IngestionService:
 
         self.job_store.create_job(job)
         return {"job_id": job_id, "status": "queued", "document_id": document_id}
+
+    def start_indexing_knowledge_base(self, knowledge_base_name: str) -> dict:
+        knowledge_base = self.document_service.get_knowledge_base(knowledge_base_name)
+        queued_jobs = 0
+        for document in self.document_service.list_documents():
+            if document.get("knowledge_base") != knowledge_base["name"]:
+                continue
+            job = self.start_indexing(document["document_id"])
+            if job.get("status") == "queued":
+                queued_jobs += 1
+        return {"knowledge_base": knowledge_base["name"], "queued_jobs": queued_jobs}
 
     def claim_next_job(self) -> dict | None:
         return self.job_store.claim_next_queued(started_at=_now_iso())
@@ -160,6 +172,7 @@ class IngestionService:
 
     def _run_job_once(self, job_id: str, document_id: str):
         document = self.document_service.get_document(document_id)
+        knowledge_base = self.document_service.get_knowledge_base(document.knowledge_base)
         document_bytes = self.document_service.read_content(document_id)
         self.api_service.delete_document_chunks(document_id)
 
@@ -170,20 +183,31 @@ class IngestionService:
         )
         self._update_job(job_id, progress=40)
 
+        tokenizer = getattr(getattr(self.api_service, "vectorizer", None), "tokenizer", None)
         chunks = chunk_blocks(
             blocks,
-            chunk_size_tokens=Config.CHUNK_SIZE_TOKENS,
-            chunk_overlap_tokens=Config.CHUNK_OVERLAP_TOKENS,
+            chunk_size_tokens=int(knowledge_base["chunk_size_tokens"]),
+            chunk_overlap_tokens=int(knowledge_base["chunk_overlap_tokens"]),
+            tokenizer=tokenizer,
         )
         if not chunks:
             raise ParsingError(message="No chunks produced from document", code="chunking_failed")
         self._update_job(job_id, progress=70)
 
+        document_keywords = extract_document_keywords(
+            blocks,
+            document_limit=int(knowledge_base["document_keyword_limit"]),
+        )
+
         documents_payload = [
             {
                 "content": chunk["content"],
                 "dataframe": None,
-                "keywords": [],
+                "keywords": extract_chunk_keywords(
+                    chunk["content"],
+                    limit=int(knowledge_base["chunk_keyword_limit"]),
+                    document_keywords=document_keywords,
+                ),
                 "metadata": {
                     "document_id": document_id,
                     "chunk_id": f"{document_id}:{chunk.get('chunk_index')}",
@@ -195,6 +219,14 @@ class IngestionService:
                     "source_name": document.source_name,
                     "tags": list(document.tags),
                     "knowledge_base": document.knowledge_base,
+                    "document_keywords": list(document_keywords),
+                    "index_profile": {
+                        "profile_mode": knowledge_base["profile_mode"],
+                        "chunk_size_tokens": knowledge_base["chunk_size_tokens"],
+                        "chunk_overlap_tokens": knowledge_base["chunk_overlap_tokens"],
+                        "chunk_keyword_limit": knowledge_base["chunk_keyword_limit"],
+                        "document_keyword_limit": knowledge_base["document_keyword_limit"],
+                    },
                 },
             }
             for chunk in chunks

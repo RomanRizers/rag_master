@@ -14,6 +14,10 @@ import type {
   KnowledgeBaseListResponse,
   DocumentUploadResponse,
   JobListResponse,
+  KnowledgeBaseDeleteResponse,
+  KnowledgeBaseReindexResponse,
+  KnowledgeBaseResponse,
+  KnowledgeBaseUpdateRequest,
   SearchRequest,
   SearchResponse
 } from "../types";
@@ -91,6 +95,41 @@ export async function createKnowledgeBase(name: string): Promise<KnowledgeBaseCr
   return apiPostJson<KnowledgeBaseCreateResponse, { name: string }>("/api/knowledge-bases", {
     name
   });
+}
+
+export async function renameKnowledgeBase(currentName: string, name: string): Promise<KnowledgeBaseResponse> {
+  return updateKnowledgeBase(currentName, { name });
+}
+
+export async function updateKnowledgeBase(
+  currentName: string,
+  payload: KnowledgeBaseUpdateRequest
+): Promise<KnowledgeBaseResponse> {
+  const response = await fetch(`/api/knowledge-bases/${encodeURIComponent(currentName)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    return parseError(response);
+  }
+  return (await response.json()) as KnowledgeBaseResponse;
+}
+
+export async function deleteKnowledgeBase(name: string): Promise<KnowledgeBaseDeleteResponse> {
+  return apiDelete<KnowledgeBaseDeleteResponse>(`/api/knowledge-bases/${encodeURIComponent(name)}`);
+}
+
+export async function reindexKnowledgeBase(name: string): Promise<KnowledgeBaseReindexResponse> {
+  const response = await fetch(`/api/knowledge-bases/${encodeURIComponent(name)}/reindex`, {
+    method: "POST"
+  });
+  if (!response.ok) {
+    return parseError(response);
+  }
+  return (await response.json()) as KnowledgeBaseReindexResponse;
 }
 
 export async function uploadDocument(

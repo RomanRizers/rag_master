@@ -11,8 +11,19 @@ from backend.infrastructure.llm import create_llm_provider
 from backend.services.api_service import ApiService
 
 DEFAULT_SYSTEM_PROMPT = (
-    "Ты помощник в RAG-системе. Отвечай по существу и используй только доступный контекст. "
-    "Если данных недостаточно, явно скажи об этом."
+    "Вы — умный помощник в RAG-системе. Вопрос пользователя приходит отдельным сообщением, "
+    "а база знаний передаётся ниже отдельным системным сообщением с заголовком 'Контекст для ответа:'. "
+    "Проанализируйте только содержимое этой базы знаний с учётом истории переписки и ответьте по правилам:\n"
+    "1. Сформируйте ответ на заданный вопрос, используя только релевантные факты из базы знаний. "
+    "Нерелевантные факты пропускайте.\n"
+    "2. Приводите только конкретные данные: точные факты, цитаты или аккуратное перефразирование. "
+    "Не добавляйте рассуждения, вводные фразы, общие комментарии или выводы от себя.\n"
+    "3. Каждый отдельный факт оформляйте отдельным абзацем.\n"
+    "4. Если база знаний содержит релевантную информацию, используйте её и не включайте фразу:\n"
+    "\"Ответ, который вы ищете, не найден в базе знаний!\n"
+    "5. Если база знаний не содержит полезной информации для ответа, выведите ровно следующую фразу без изменений:\n"
+    "\"Ответ, который вы ищете, не найден в базе знаний!\n"
+    "6. Не добавляйте внешние знания, догадки, предположения или информацию вне переданного контекста."
 )
 
 
@@ -162,7 +173,7 @@ def _now_iso() -> str:
 
 
 def _default_retriever(query: str, top_k: int, keywords: list[str] | None, filters: dict | None = None):
-    return ApiService().search_query(query, top_k=top_k, keywords=keywords)
+    return ApiService().search_query(query, top_k=top_k, keywords=keywords, filters=filters)
 
 
 def _apply_search_filters(search_results: list[dict], filters: dict | None) -> list[dict]:
@@ -271,7 +282,9 @@ def _select_context_results(query: str, search_results: list[dict]) -> list[dict
 
 def _rerank_results(query: str, search_results: list[dict]) -> list[dict]:
     semantic_weight = min(1.0, max(0.0, Config.RERANK_SEMANTIC_WEIGHT))
-    lexical_weight = 1.0 - semantic_weight
+    remainder_weight = 1.0 - semantic_weight
+    lexical_weight = remainder_weight * 0.65
+    keyword_weight = remainder_weight * 0.35
     query_tokens = set(_tokenize(query))
     max_semantic = _max_semantic_score(search_results)
 
@@ -279,8 +292,13 @@ def _rerank_results(query: str, search_results: list[dict]) -> list[dict]:
         payload = item.get("payload") or {}
         content = str(payload.get("content") or "")
         lexical_score = _lexical_overlap_score(query_tokens, content)
+        keyword_score = _keyword_overlap_score(query_tokens, payload.get("keywords") or [])
         semantic_score = _normalized_semantic_score(item, max_semantic)
-        combined = semantic_weight * semantic_score + lexical_weight * lexical_score
+        combined = (
+            semantic_weight * semantic_score
+            + lexical_weight * lexical_score
+            + keyword_weight * keyword_score
+        )
         stable_id = str(item.get("id") or "")
         return combined, semantic_score, stable_id
 
@@ -298,6 +316,21 @@ def _lexical_overlap_score(query_tokens: set[str], content: str) -> float:
     if not content_tokens:
         return 0.0
     overlap = query_tokens.intersection(content_tokens)
+    return len(overlap) / float(len(query_tokens))
+
+
+def _keyword_overlap_score(query_tokens: set[str], keywords: list[str] | str) -> float:
+    if not query_tokens:
+        return 0.0
+    if isinstance(keywords, str):
+        keyword_tokens = set(_tokenize(keywords))
+    else:
+        keyword_tokens = set()
+        for keyword in keywords or []:
+            keyword_tokens.update(_tokenize(str(keyword)))
+    if not keyword_tokens:
+        return 0.0
+    overlap = query_tokens.intersection(keyword_tokens)
     return len(overlap) / float(len(query_tokens))
 
 

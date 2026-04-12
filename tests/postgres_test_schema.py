@@ -47,6 +47,17 @@ SCHEMA_SQL = [
         created_at TIMESTAMPTZ NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_bases(
+        name TEXT PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        profile_mode TEXT NOT NULL DEFAULT 'balanced',
+        chunk_size_tokens INTEGER NOT NULL DEFAULT 320,
+        chunk_overlap_tokens INTEGER NOT NULL DEFAULT 64,
+        chunk_keyword_limit INTEGER NOT NULL DEFAULT 6,
+        document_keyword_limit INTEGER NOT NULL DEFAULT 16
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_document_id ON ingestion_jobs(document_id)",
     "CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created ON chat_messages(session_id, created_at)",
 ]

@@ -4,19 +4,52 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   createKnowledgeBase,
+  deleteKnowledgeBase,
   deleteDocument,
   getDocumentIndexStats,
   indexDocument,
   listDocuments,
   listJobs,
   listKnowledgeBases,
+  reindexKnowledgeBase,
+  renameKnowledgeBase,
+  updateKnowledgeBase,
   uploadDocument
 } from "../api/client";
-import type { DocumentItem, JobItem } from "../types";
+import type { DocumentItem, JobItem, KnowledgeBaseItem } from "../types";
 import { appErrorCopy } from "../utils/appError";
 import { ErrorBanner } from "./ErrorBanner";
 
 type StatsByDocument = Record<string, { chunks_count: number; latest_job_status?: string | null }>;
+
+const PROFILE_PRESETS = {
+  precision: {
+    chunk_size_tokens: 220,
+    chunk_overlap_tokens: 40,
+    chunk_keyword_limit: 5,
+    document_keyword_limit: 12
+  },
+  balanced: {
+    chunk_size_tokens: 320,
+    chunk_overlap_tokens: 64,
+    chunk_keyword_limit: 6,
+    document_keyword_limit: 16
+  },
+  recall: {
+    chunk_size_tokens: 480,
+    chunk_overlap_tokens: 96,
+    chunk_keyword_limit: 8,
+    document_keyword_limit: 20
+  }
+} satisfies Record<string, Omit<KnowledgeBaseItem, "name" | "document_count" | "created_at" | "profile_mode">>;
+
+type KnowledgeBaseSettingsState = {
+  profile_mode: string;
+  chunk_size_tokens: number;
+  chunk_overlap_tokens: number;
+  chunk_keyword_limit: number;
+  document_keyword_limit: number;
+};
 
 function formatBytes(value: number): string {
   if (!Number.isFinite(value) || value <= 0) {
@@ -66,6 +99,7 @@ export function DocumentsPage() {
   const params = useParams<{ datasetName?: string }>();
 
   const [file, setFile] = useState<File | null>(null);
+  const [isCreateKnowledgeBaseOpen, setIsCreateKnowledgeBaseOpen] = useState(false);
   const [newKnowledgeBaseName, setNewKnowledgeBaseName] = useState("");
   const [datasetPage, setDatasetPage] = useState(1);
   const [datasetPageSize, setDatasetPageSize] = useState(8);
@@ -73,6 +107,13 @@ export function DocumentsPage() {
   const [tagsText, setTagsText] = useState("");
   const [knowledgeBase, setKnowledgeBase] = useState("default");
   const [statsByDocument, setStatsByDocument] = useState<StatsByDocument>({});
+  const [knowledgeBaseSettings, setKnowledgeBaseSettings] = useState<KnowledgeBaseSettingsState>({
+    profile_mode: "balanced",
+    chunk_size_tokens: 320,
+    chunk_overlap_tokens: 64,
+    chunk_keyword_limit: 6,
+    document_keyword_limit: 16
+  });
 
   const documentsQuery = useQuery({
     queryKey: ["documents"],
@@ -111,9 +152,57 @@ export function DocumentsPage() {
     mutationFn: createKnowledgeBase,
     onSuccess: (payload) => {
       queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+      setIsCreateKnowledgeBaseOpen(false);
       setNewKnowledgeBaseName("");
       setKnowledgeBase(payload.name);
       navigate(`/dataset/${encodeURIComponent(payload.name)}`);
+    }
+  });
+
+  const renameKnowledgeBaseMutation = useMutation({
+    mutationFn: ({ currentName, nextName }: { currentName: string; nextName: string }) =>
+      renameKnowledgeBase(currentName, nextName),
+    onSuccess: (payload, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      if (activeKnowledgeBase === variables.currentName) {
+        setKnowledgeBase(payload.name);
+        navigate(`/dataset/${encodeURIComponent(payload.name)}`);
+      }
+    }
+  });
+
+  const deleteKnowledgeBaseMutation = useMutation({
+    mutationFn: deleteKnowledgeBase,
+    onSuccess: (_, deletedName) => {
+      queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      if (activeKnowledgeBase === deletedName) {
+        navigate("/dataset");
+      }
+    }
+  });
+
+  const updateKnowledgeBaseMutation = useMutation({
+    mutationFn: ({ name, payload }: { name: string; payload: KnowledgeBaseSettingsState }) =>
+      updateKnowledgeBase(name, payload),
+    onSuccess: (payload) => {
+      queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
+      setKnowledgeBaseSettings({
+        profile_mode: payload.profile_mode,
+        chunk_size_tokens: payload.chunk_size_tokens,
+        chunk_overlap_tokens: payload.chunk_overlap_tokens,
+        chunk_keyword_limit: payload.chunk_keyword_limit,
+        document_keyword_limit: payload.document_keyword_limit
+      });
+    }
+  });
+
+  const reindexKnowledgeBaseMutation = useMutation({
+    mutationFn: reindexKnowledgeBase,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
     }
   });
 
@@ -184,7 +273,13 @@ export function DocumentsPage() {
 
     return Array.from(documentsByKnowledgeBase.entries()).map(([name, items]) => ({
       name,
-      document_count: items.length
+      document_count: items.length,
+      created_at: null,
+      profile_mode: "balanced",
+      chunk_size_tokens: 320,
+      chunk_overlap_tokens: 64,
+      chunk_keyword_limit: 6,
+      document_keyword_limit: 16
     }));
   }, [documentsByKnowledgeBase, knowledgeBasesQuery.data?.knowledge_bases]);
 
@@ -223,6 +318,19 @@ export function DocumentsPage() {
   );
 
   const selectedDatasetInfo = knowledgeBases.find((item) => item.name === activeKnowledgeBase);
+  useEffect(() => {
+    if (!selectedDatasetInfo) {
+      return;
+    }
+    setKnowledgeBaseSettings({
+      profile_mode: selectedDatasetInfo.profile_mode,
+      chunk_size_tokens: selectedDatasetInfo.chunk_size_tokens,
+      chunk_overlap_tokens: selectedDatasetInfo.chunk_overlap_tokens,
+      chunk_keyword_limit: selectedDatasetInfo.chunk_keyword_limit,
+      document_keyword_limit: selectedDatasetInfo.document_keyword_limit
+    });
+  }, [selectedDatasetInfo]);
+
   const totalDatasetPages = Math.max(1, Math.ceil(knowledgeBases.length / datasetPageSize));
   const currentDatasetPage = Math.min(datasetPage, totalDatasetPages);
   const visibleKnowledgeBases = knowledgeBases.slice(
@@ -257,10 +365,36 @@ export function DocumentsPage() {
     createKnowledgeBaseMutation.mutate(trimmed);
   }
 
+  function submitKnowledgeBaseSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeKnowledgeBase) {
+      return;
+    }
+    updateKnowledgeBaseMutation.mutate({
+      name: activeKnowledgeBase,
+      payload: knowledgeBaseSettings
+    });
+  }
+
+  function applyProfilePreset(profileMode: keyof typeof PROFILE_PRESETS) {
+    const preset = PROFILE_PRESETS[profileMode];
+    setKnowledgeBaseSettings({
+      profile_mode: profileMode,
+      chunk_size_tokens: preset.chunk_size_tokens,
+      chunk_overlap_tokens: preset.chunk_overlap_tokens,
+      chunk_keyword_limit: preset.chunk_keyword_limit,
+      document_keyword_limit: preset.document_keyword_limit
+    });
+  }
+
   return (
     <div className="page-section">
       {(uploadMutation.isError ||
         createKnowledgeBaseMutation.isError ||
+        renameKnowledgeBaseMutation.isError ||
+        deleteKnowledgeBaseMutation.isError ||
+        updateKnowledgeBaseMutation.isError ||
+        reindexKnowledgeBaseMutation.isError ||
         documentsQuery.isError ||
         indexMutation.isError ||
         statsMutation.isError ||
@@ -269,6 +403,10 @@ export function DocumentsPage() {
           error={
             uploadMutation.error ??
             createKnowledgeBaseMutation.error ??
+            renameKnowledgeBaseMutation.error ??
+            deleteKnowledgeBaseMutation.error ??
+            updateKnowledgeBaseMutation.error ??
+            reindexKnowledgeBaseMutation.error ??
             documentsQuery.error ??
             indexMutation.error ??
             statsMutation.error ??
@@ -304,21 +442,45 @@ export function DocumentsPage() {
                   <option value={16}>16</option>
                 </select>
               </label>
-              <form className="dataset-create-form" onSubmit={submitKnowledgeBaseCreate}>
-                <input
-                  type="text"
-                  value={newKnowledgeBaseName}
-                  placeholder="Новая база знаний"
-                  onChange={(event) => setNewKnowledgeBaseName(event.target.value)}
-                />
+              {!isCreateKnowledgeBaseOpen ? (
                 <button
-                  type="submit"
+                  type="button"
                   className="primary-action"
-                  disabled={createKnowledgeBaseMutation.isPending || !newKnowledgeBaseName.trim()}
+                  onClick={() => setIsCreateKnowledgeBaseOpen(true)}
                 >
-                  {createKnowledgeBaseMutation.isPending ? "Создание..." : "Create Dataset"}
+                  Create Knowledge Base
                 </button>
-              </form>
+              ) : (
+                <form className="dataset-create-form" onSubmit={submitKnowledgeBaseCreate}>
+                  <input
+                    type="text"
+                    value={newKnowledgeBaseName}
+                    placeholder="Название базы знаний"
+                    onChange={(event) => setNewKnowledgeBaseName(event.target.value)}
+                    autoFocus
+                  />
+                  <div className="dataset-create-actions">
+                    <button
+                      type="submit"
+                      className="primary-action"
+                      disabled={createKnowledgeBaseMutation.isPending || !newKnowledgeBaseName.trim()}
+                    >
+                      {createKnowledgeBaseMutation.isPending ? "Создание..." : "Create Knowledge Base"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() => {
+                        setIsCreateKnowledgeBaseOpen(false);
+                        setNewKnowledgeBaseName("");
+                      }}
+                      disabled={createKnowledgeBaseMutation.isPending}
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
 
@@ -331,17 +493,68 @@ export function DocumentsPage() {
               const indexedCount = kbDocuments.filter((document) => document.status === "indexed").length;
 
               return (
-                <button
+                <div
                   key={item.name}
-                  type="button"
                   className="dataset-tile"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => {
                     setKnowledgeBase(item.name);
                     navigate(`/dataset/${encodeURIComponent(item.name)}`);
                   }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setKnowledgeBase(item.name);
+                      navigate(`/dataset/${encodeURIComponent(item.name)}`);
+                    }
+                  }}
                 >
                   <div className="dataset-tile-badge">{makeDatasetBadge(item.name)}</div>
                   <div className="dataset-tile-copy">
+                    <div className="dataset-tile-actions">
+                      <button
+                        type="button"
+                        className="dataset-icon-button"
+                        aria-label={`Переименовать ${item.name}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const nextName = window.prompt("Новое название базы знаний", item.name)?.trim();
+                          if (!nextName || nextName === item.name) {
+                            return;
+                          }
+                          renameKnowledgeBaseMutation.mutate({ currentName: item.name, nextName });
+                        }}
+                        disabled={renameKnowledgeBaseMutation.isPending || deleteKnowledgeBaseMutation.isPending}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        className="dataset-icon-button danger"
+                        aria-label={`Удалить ${item.name}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (item.document_count > 0) {
+                            window.alert("Можно удалить только пустую базу знаний.");
+                            return;
+                          }
+                          if (!window.confirm(`Удалить базу знаний "${item.name}"?`)) {
+                            return;
+                          }
+                          deleteKnowledgeBaseMutation.mutate(item.name);
+                        }}
+                        disabled={
+                          renameKnowledgeBaseMutation.isPending ||
+                          deleteKnowledgeBaseMutation.isPending ||
+                          item.document_count > 0
+                        }
+                      >
+                        ×
+                      </button>
+                    </div>
                     <div className="dataset-tile-topline">
                       <strong>{item.name}</strong>
                       <span className="dataset-tile-count">{item.document_count} files</span>
@@ -352,7 +565,7 @@ export function DocumentsPage() {
                     </div>
                     <span>{newestDocument ? formatIso(newestDocument.created_at) : "empty dataset"}</span>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -413,6 +626,108 @@ export function DocumentsPage() {
                 <strong>{selectedDocuments.length}</strong>
               </article>
             </div>
+
+            <form className="dataset-settings-form" onSubmit={submitKnowledgeBaseSettings}>
+              <div className="dataset-settings-head">
+                <strong>Dataset Settings</strong>
+                <span className="muted">Профиль индексирования применяется к новым документам и при реиндексации.</span>
+              </div>
+
+              <label>
+                <span>Preset</span>
+                <select
+                  value={knowledgeBaseSettings.profile_mode}
+                  onChange={(event) =>
+                    applyProfilePreset(event.target.value as keyof typeof PROFILE_PRESETS)
+                  }
+                >
+                  <option value="precision">Precision</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="recall">Recall</option>
+                </select>
+              </label>
+
+              <div className="dataset-settings-grid">
+                <label>
+                  <span>Chunk size</span>
+                  <input
+                    type="number"
+                    min={128}
+                    max={480}
+                    value={knowledgeBaseSettings.chunk_size_tokens}
+                    onChange={(event) =>
+                      setKnowledgeBaseSettings((current) => ({
+                        ...current,
+                        chunk_size_tokens: Number(event.target.value)
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Overlap</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={479}
+                    value={knowledgeBaseSettings.chunk_overlap_tokens}
+                    onChange={(event) =>
+                      setKnowledgeBaseSettings((current) => ({
+                        ...current,
+                        chunk_overlap_tokens: Number(event.target.value)
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Chunk keywords</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={32}
+                    value={knowledgeBaseSettings.chunk_keyword_limit}
+                    onChange={(event) =>
+                      setKnowledgeBaseSettings((current) => ({
+                        ...current,
+                        chunk_keyword_limit: Number(event.target.value)
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Document keywords</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={32}
+                    value={knowledgeBaseSettings.document_keyword_limit}
+                    onChange={(event) =>
+                      setKnowledgeBaseSettings((current) => ({
+                        ...current,
+                        document_keyword_limit: Number(event.target.value)
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="dataset-settings-actions">
+                <button
+                  type="submit"
+                  className="secondary-action"
+                  disabled={updateKnowledgeBaseMutation.isPending}
+                >
+                  {updateKnowledgeBaseMutation.isPending ? "Сохранение..." : "Save settings"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-action"
+                  disabled={reindexKnowledgeBaseMutation.isPending}
+                  onClick={() => reindexKnowledgeBaseMutation.mutate(activeKnowledgeBase)}
+                >
+                  {reindexKnowledgeBaseMutation.isPending ? "Реиндексация..." : "Reindex all"}
+                </button>
+              </div>
+            </form>
 
             <form className="upload-form dataset-upload-form" onSubmit={submitUpload}>
               <label>

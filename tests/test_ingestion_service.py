@@ -160,6 +160,43 @@ class IngestionServiceTestCase(unittest.TestCase):
             self.assertEqual(metadata["chunk_index"], 0)
             self.assertEqual(metadata["token_count"], 4)
             self.assertEqual(metadata["source_uri"], f"{record['document_id']}/doc.txt")
+            self.assertTrue(api_service.last_documents[0]["keywords"])
+            self.assertTrue(metadata["document_keywords"])
+            self.assertEqual(metadata["index_profile"]["profile_mode"], "balanced")
+
+    def test_index_uses_knowledge_base_profile(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage = LocalFileStorageAdapter(temp_dir)
+            documents = DocumentService(storage=storage)
+            documents.create_knowledge_base("precision-kb")
+            documents.update_knowledge_base(
+                "precision-kb",
+                profile_mode="precision",
+                chunk_size_tokens=220,
+                chunk_overlap_tokens=40,
+                chunk_keyword_limit=5,
+                document_keyword_limit=12,
+            )
+            record = documents.create_document(
+                "doc.txt",
+                "text/plain",
+                b"one two three four five six seven eight",
+                knowledge_base="precision-kb",
+            )
+
+            api_service = _ApiServiceCapturePayload()
+            ingestion = IngestionService(document_service=documents, api_service=api_service)
+
+            result = ingestion.start_indexing(record["document_id"])
+            claimed = ingestion.claim_next_job()
+            self.assertIsNotNone(claimed)
+            self.assertEqual(claimed["job_id"], result["job_id"])
+            ingestion.process_job(result["job_id"])
+
+            metadata = api_service.last_documents[0]["metadata"]
+            self.assertEqual(metadata["index_profile"]["profile_mode"], "precision")
+            self.assertEqual(metadata["index_profile"]["chunk_size_tokens"], 220)
+            self.assertLessEqual(len(api_service.last_documents[0]["keywords"]), 5)
 
     def test_get_document_index_stats(self):
         with tempfile.TemporaryDirectory() as temp_dir:

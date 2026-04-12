@@ -13,6 +13,9 @@ from backend.api.schemas import (
     ChatSessionMessagesResponse,
     KnowledgeBaseCreateRequest,
     KnowledgeBaseCreateResponse,
+    KnowledgeBaseRenameRequest,
+    KnowledgeBaseReindexResponse,
+    KnowledgeBaseResponse,
     DocumentIndexResponse,
     DocumentIndexStatsResponse,
     KnowledgeBaseListResponse,
@@ -162,6 +165,54 @@ async def create_knowledge_base(request: Request, payload: KnowledgeBaseCreateRe
     item = await run_in_threadpool(get_document_service(request).create_knowledge_base, payload.name)
     response = KnowledgeBaseCreateResponse.model_validate(item)
     return JSONResponse(content=response.model_dump(), status_code=201)
+
+
+@api_router.patch("/api/knowledge-bases/{knowledge_base_name}")
+async def rename_knowledge_base(
+    request: Request,
+    knowledge_base_name: str,
+    payload: KnowledgeBaseRenameRequest,
+    _: None = Depends(ensure_json_content_type),
+):
+    service = get_document_service(request)
+    target_name = knowledge_base_name
+    if payload.name and payload.name != knowledge_base_name:
+        renamed = await run_in_threadpool(
+            service.rename_knowledge_base,
+            knowledge_base_name,
+            payload.name,
+        )
+        target_name = renamed["name"]
+
+    item = await run_in_threadpool(
+        lambda: service.update_knowledge_base(
+            target_name,
+            profile_mode=payload.profile_mode,
+            chunk_size_tokens=payload.chunk_size_tokens,
+            chunk_overlap_tokens=payload.chunk_overlap_tokens,
+            chunk_keyword_limit=payload.chunk_keyword_limit,
+            document_keyword_limit=payload.document_keyword_limit,
+        )
+    )
+    response = KnowledgeBaseResponse.model_validate(item)
+    return JSONResponse(content=response.model_dump())
+
+
+@api_router.post("/api/knowledge-bases/{knowledge_base_name}/reindex")
+async def reindex_knowledge_base(request: Request, knowledge_base_name: str):
+    result = await run_in_threadpool(
+        get_ingestion_service(request).start_indexing_knowledge_base,
+        knowledge_base_name,
+    )
+    response = KnowledgeBaseReindexResponse.model_validate(result)
+    return JSONResponse(content=response.model_dump(), status_code=202)
+
+
+@api_router.delete("/api/knowledge-bases/{knowledge_base_name}")
+async def delete_knowledge_base(request: Request, knowledge_base_name: str):
+    item = await run_in_threadpool(get_document_service(request).delete_knowledge_base, knowledge_base_name)
+    response = KnowledgeBaseResponse.model_validate(item)
+    return JSONResponse(content={"status": "deleted", "knowledge_base": response.model_dump()})
 
 
 @api_router.delete("/api/documents/{document_id}")

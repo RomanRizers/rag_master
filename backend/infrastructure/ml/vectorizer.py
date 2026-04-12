@@ -1,12 +1,16 @@
-from transformers import AutoTokenizer, AutoModel
-import torch
+from __future__ import annotations
+
 import numpy as np
+import structlog
+import torch
 import torch.nn.functional as F
+from transformers import AutoModel, AutoTokenizer
+
 from backend.core.config import Config
 from backend.core.exceptions import VectorizationError
-import structlog
 
 logger = structlog.get_logger("vectorizer")
+
 
 class TextVectorizer:
     def __init__(self, model_name=None):
@@ -39,3 +43,16 @@ class TextVectorizer:
             raise
         except Exception as error:
             raise VectorizationError(details={"reason": str(error), "model_name": self.model_name}) from error
+
+    def encode_for_chunking(self, text: str) -> list[int]:
+        if not isinstance(text, str) or not text.strip():
+            return []
+        return self.tokenizer.encode(text, add_special_tokens=False)
+
+    def decode_tokens(self, token_ids: list[int]) -> str:
+        if not token_ids:
+            return ""
+        return self.tokenizer.decode(token_ids, skip_special_tokens=True).strip()
+
+    def count_tokens(self, text: str) -> int:
+        return len(self.encode_for_chunking(text))

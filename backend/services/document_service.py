@@ -11,6 +11,7 @@ from backend.core.exceptions import ValidationError
 from backend.ingestion.file_types import resolve_upload_mime_type
 from backend.infrastructure.document_store import DocumentStore, create_document_store
 from backend.infrastructure.storage import StorageAdapter, create_storage_adapter
+from backend.services.indexing_profiles import resolve_index_profile
 
 DEFAULT_KNOWLEDGE_BASE = "default"
 
@@ -133,16 +134,161 @@ class DocumentService:
             knowledge_base = _normalize_knowledge_base(item.get("knowledge_base"))
             counts[knowledge_base] = counts.get(knowledge_base, 0) + 1
 
+        items: dict[str, dict] = {}
         for item in self.store.list_knowledge_bases():
             knowledge_base = _normalize_knowledge_base(item.get("name"))
+            items[knowledge_base] = self._serialize_knowledge_base(
+                {
+                    **resolve_index_profile(
+                        item.get("profile_mode"),
+                        chunk_size_tokens=item.get("chunk_size_tokens"),
+                        chunk_overlap_tokens=item.get("chunk_overlap_tokens"),
+                        chunk_keyword_limit=item.get("chunk_keyword_limit"),
+                        document_keyword_limit=item.get("document_keyword_limit"),
+                    ),
+                    "name": knowledge_base,
+                    "created_at": item.get("created_at"),
+                    "document_count": int(item.get("document_count") or 0),
+                }
+            )
             counts.setdefault(knowledge_base, int(item.get("document_count") or 0))
 
-        return [{"name": name, "document_count": counts[name]} for name in sorted(counts.keys())]
+        for knowledge_base, count in counts.items():
+            if knowledge_base not in items:
+                items[knowledge_base] = self._serialize_knowledge_base(
+                    {
+                        **resolve_index_profile(),
+                        "name": knowledge_base,
+                        "created_at": None,
+                        "document_count": count,
+                    }
+                )
+            else:
+                items[knowledge_base]["document_count"] = count
+
+        return [items[name] for name in sorted(items.keys())]
 
     def create_knowledge_base(self, name: str) -> dict:
         normalized = _normalize_knowledge_base(name)
-        self.store.create_knowledge_base(normalized)
-        return {"name": normalized, "document_count": 0}
+        existing_names = {item["name"] for item in self.list_knowledge_bases()}
+        if normalized in existing_names:
+            raise ValidationError(
+                message=f"Knowledge base already exists: {normalized}",
+                code="knowledge_base_exists",
+                status_code=409,
+            )
+        created = self.store.create_knowledge_base(normalized)
+        return self._serialize_knowledge_base({**created, "document_count": 0})
+
+    def get_knowledge_base(self, name: str) -> dict:
+        normalized = _normalize_knowledge_base(name)
+        record = self.store.get_knowledge_base(normalized)
+        if record is None:
+            raise DocumentError(
+                message=f"Knowledge base not found: {normalized}",
+                code="knowledge_base_not_found",
+                status_code=404,
+            )
+        count = sum(
+            1 for item in self.store.list_documents() if _normalize_knowledge_base(item.get("knowledge_base")) == normalized
+        )
+        return self._serialize_knowledge_base({**record, "document_count": count})
+
+    def rename_knowledge_base(self, current_name: str, new_name: str) -> dict:
+        current_normalized = _normalize_knowledge_base(current_name)
+        next_normalized = _normalize_knowledge_base(new_name)
+        items = self.list_knowledge_bases()
+        counts = {item["name"]: int(item.get("document_count") or 0) for item in items}
+        if current_normalized not in counts:
+            raise DocumentError(
+                message=f"Knowledge base not found: {current_normalized}",
+                code="knowledge_base_not_found",
+                status_code=404,
+            )
+        if next_normalized != current_normalized and next_normalized in counts:
+            raise ValidationError(
+                message=f"Knowledge base already exists: {next_normalized}",
+                code="knowledge_base_exists",
+                status_code=409,
+            )
+        if next_normalized == current_normalized:
+            return self.get_knowledge_base(current_normalized)
+        renamed = self.store.rename_knowledge_base(current_normalized, next_normalized)
+        if renamed is None:
+            raise DocumentError(
+                message=f"Knowledge base not found: {current_normalized}",
+                code="knowledge_base_not_found",
+                status_code=404,
+            )
+        return self._serialize_knowledge_base({**renamed, "document_count": counts[current_normalized]})
+
+    def update_knowledge_base(
+        self,
+        name: str,
+        *,
+        profile_mode: str | None = None,
+        chunk_size_tokens: int | None = None,
+        chunk_overlap_tokens: int | None = None,
+        chunk_keyword_limit: int | None = None,
+        document_keyword_limit: int | None = None,
+    ) -> dict:
+        normalized = _normalize_knowledge_base(name)
+        current = self.store.get_knowledge_base(normalized)
+        if current is None:
+            raise DocumentError(
+                message=f"Knowledge base not found: {normalized}",
+                code="knowledge_base_not_found",
+                status_code=404,
+            )
+        resolved = resolve_index_profile(
+            profile_mode or current.get("profile_mode"),
+            chunk_size_tokens=chunk_size_tokens if chunk_size_tokens is not None else current.get("chunk_size_tokens"),
+            chunk_overlap_tokens=chunk_overlap_tokens if chunk_overlap_tokens is not None else current.get("chunk_overlap_tokens"),
+            chunk_keyword_limit=chunk_keyword_limit if chunk_keyword_limit is not None else current.get("chunk_keyword_limit"),
+            document_keyword_limit=document_keyword_limit if document_keyword_limit is not None else current.get("document_keyword_limit"),
+        )
+        updated = self.store.update_knowledge_base(normalized, resolved)
+        if updated is None:
+            raise DocumentError(
+                message=f"Knowledge base not found: {normalized}",
+                code="knowledge_base_not_found",
+                status_code=404,
+            )
+        count = sum(
+            1 for item in self.store.list_documents() if _normalize_knowledge_base(item.get("knowledge_base")) == normalized
+        )
+        return self._serialize_knowledge_base({**updated, "document_count": count})
+
+    def delete_knowledge_base(self, name: str) -> dict:
+        normalized = _normalize_knowledge_base(name)
+        counts = {item["name"]: int(item.get("document_count") or 0) for item in self.list_knowledge_bases()}
+        if normalized not in counts:
+            raise DocumentError(
+                message=f"Knowledge base not found: {normalized}",
+                code="knowledge_base_not_found",
+                status_code=404,
+            )
+        if counts[normalized] > 0:
+            raise ValidationError(
+                message=f"Knowledge base is not empty: {normalized}",
+                code="knowledge_base_not_empty",
+                status_code=409,
+            )
+        deleted = self.store.delete_knowledge_base(normalized)
+        if deleted is None:
+            raise DocumentError(
+                message=f"Knowledge base not found: {normalized}",
+                code="knowledge_base_not_found",
+                status_code=404,
+            )
+        return self._serialize_knowledge_base(
+            {
+                **resolve_index_profile(),
+                "name": normalized,
+                "created_at": None,
+                "document_count": 0,
+            }
+        )
 
     def set_status(self, document_id: str, status: str):
         updated = self.store.set_status(document_id, status)
@@ -173,6 +319,26 @@ class DocumentService:
         close_fn = getattr(self.store, "close", None)
         if callable(close_fn):
             close_fn()
+
+    @staticmethod
+    def _serialize_knowledge_base(item: dict) -> dict:
+        resolved = resolve_index_profile(
+            item.get("profile_mode"),
+            chunk_size_tokens=item.get("chunk_size_tokens"),
+            chunk_overlap_tokens=item.get("chunk_overlap_tokens"),
+            chunk_keyword_limit=item.get("chunk_keyword_limit"),
+            document_keyword_limit=item.get("document_keyword_limit"),
+        )
+        return {
+            "name": _normalize_knowledge_base(item.get("name")),
+            "document_count": int(item.get("document_count") or 0),
+            "created_at": item.get("created_at"),
+            "profile_mode": str(resolved["profile_mode"]),
+            "chunk_size_tokens": int(resolved["chunk_size_tokens"]),
+            "chunk_overlap_tokens": int(resolved["chunk_overlap_tokens"]),
+            "chunk_keyword_limit": int(resolved["chunk_keyword_limit"]),
+            "document_keyword_limit": int(resolved["document_keyword_limit"]),
+        }
 
 
 def _now_iso() -> str:
