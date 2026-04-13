@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import hashlib
 import re
 from typing import Iterator
 from threading import RLock
@@ -65,6 +66,8 @@ class ChatService:
         keywords: list[str] | None = None,
         filters: dict | None = None,
     ) -> tuple[dict, dict]:
+        clean_message = message.strip()
+
         with self._lock:
             history = self.chat_store.get_messages(session_id)
             if history is None:
@@ -73,38 +76,40 @@ class ChatService:
             user_message = {
                 "id": str(uuid4()),
                 "role": "user",
-                "content": message.strip(),
+                "content": clean_message,
                 "citations": [],
                 "created_at": _now_iso(),
             }
             self.chat_store.append_message(session_id, user_message)
+            history = list(history)
             history.append(user_message)
 
-            effective_top_k = top_k or Config.TOP_K_DEFAULT
-            retrieval = self.retriever(message.strip(), effective_top_k, keywords, filters)
-            search_results = retrieval.get("results", [])
-            filtered_results = _apply_search_filters(search_results, filters)
-            selected_results = _select_context_results(message.strip(), filtered_results)
-            if _should_return_no_answer(selected_results):
-                assistant_text = NO_ANSWER_MESSAGE
-                citations: list[dict] = []
-                llm_messages = []
-            else:
-                context = _build_context(selected_results, Config.CHAT_MAX_CONTEXT_TOKENS)
-                citations = _build_citations(selected_results)
-                llm_messages = _build_llm_messages(_compress_history(history), context)
+        # Retrieval and LLM call outside the lock — these are slow (network/model)
+        effective_top_k = top_k or Config.TOP_K_DEFAULT
+        retrieval = self.retriever(clean_message, effective_top_k, keywords, filters)
+        search_results = retrieval.get("results", [])
+        filtered_results = _apply_search_filters(search_results, filters)
+        selected_results = _select_context_results(clean_message, filtered_results)
+        if _should_return_no_answer(selected_results):
+            assistant_text = NO_ANSWER_MESSAGE
+            citations: list[dict] = []
+        else:
+            context = _build_context(selected_results, Config.CHAT_MAX_CONTEXT_TOKENS)
+            citations = _build_citations(selected_results)
+            llm_messages = _build_llm_messages(_compress_history(history), context)
+            assistant_text = self.llm_provider.generate(llm_messages)
 
-                assistant_text = self.llm_provider.generate(llm_messages)
-            assistant_message = {
-                "id": str(uuid4()),
-                "role": "assistant",
-                "content": assistant_text,
-                "citations": citations,
-                "created_at": _now_iso(),
-            }
+        assistant_message = {
+            "id": str(uuid4()),
+            "role": "assistant",
+            "content": assistant_text,
+            "citations": citations,
+            "created_at": _now_iso(),
+        }
+        with self._lock:
             self.chat_store.append_message(session_id, assistant_message)
 
-            return user_message, assistant_message
+        return user_message, assistant_message
 
     def stream_message(
         self,
@@ -378,22 +383,30 @@ def _keyword_overlap_score(query_tokens: set[str], keywords: list[str] | str) ->
 
 def _metadata_match_score(query_info: dict, payload: dict) -> float:
     score = 0.0
-    heading_tokens = set(_tokenize(" ".join(str(item) for item in (payload.get("heading_path") or []))))
     query_tokens = set(query_info.get("query_tokens") or [])
+
+    heading_tokens = set(_tokenize(" ".join(str(item) for item in (payload.get("heading_path") or []))))
     if heading_tokens and heading_tokens.intersection(query_tokens):
-        score += 0.45
+        score = max(score, 0.45)
+
     if payload.get("is_table_like"):
-        score += 0.15
+        score = max(score, 0.15)
+
     section_tokens = set(_tokenize(str(payload.get("section") or "")))
     if section_tokens and section_tokens.intersection(query_tokens):
-        score += 0.2
+        score = max(score, 0.2)
+
     document_name_tokens = set(_tokenize(str(payload.get("document_name") or "")))
     if document_name_tokens and document_name_tokens.intersection(query_tokens):
-        score += 0.2
+        score = max(score, 0.2)
+
+    content_lower = str(payload.get("content") or "").lower()
     for identifier in query_info.get("exact_identifiers") or []:
-        if identifier and identifier.lower() in str(payload.get("content") or "").lower():
-            score += 0.35
-    return min(score, 1.0)
+        if identifier and identifier.lower() in content_lower:
+            score = max(score, 0.9)
+            break
+
+    return score
 
 
 def _max_semantic_score(search_results: list[dict]) -> float:
@@ -435,12 +448,13 @@ def _format_source_meta(index: int, payload: dict) -> str:
 
 
 def _result_fingerprint(payload: dict) -> str:
+    content_hash = hashlib.sha256((payload.get("content") or "").encode()).hexdigest()
     return "|".join(
         [
             str(payload.get("document_id") or ""),
             str(payload.get("page") or ""),
             str(payload.get("section") or ""),
-            str(payload.get("content") or "")[:96],
+            content_hash,
         ]
     )
 
