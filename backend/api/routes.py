@@ -1,3 +1,4 @@
+import io
 import json
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
@@ -266,6 +267,18 @@ async def get_document_chunks(request: Request, document_id: str):
     payload = await run_in_threadpool(get_ingestion_service(request).get_document_chunks, document_id)
     response = DocumentChunksResponse.model_validate(payload)
     return JSONResponse(content=response.model_dump())
+
+
+@api_router.get("/api/documents/{document_id}/file")
+async def download_document_file(request: Request, document_id: str):
+    doc_service = get_document_service(request)
+    record = await run_in_threadpool(doc_service.get_document, document_id)
+    content = await run_in_threadpool(doc_service.read_content, document_id)
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=record.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{record.file_name}"'},
+    )
 
 
 @api_router.post("/api/admin/index/orphans/cleanup")
