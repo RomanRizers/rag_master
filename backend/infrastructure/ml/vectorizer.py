@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 import structlog
 import torch
@@ -14,31 +16,50 @@ logger = structlog.get_logger("vectorizer")
 
 class TextVectorizer:
     def __init__(self, model_name=None):
-        """Инициализирует токенизатор и модель для использования e5-base-en-ru с Hugging Face."""
         self.model_name = model_name or Config.MODEL_NAME
         logger.info("vectorizer_model_loading", model_name=self.model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = AutoModel.from_pretrained(self.model_name)
         self.model.eval()
+        self._lock = threading.Lock()
         logger.info("vectorizer_model_loaded", model_name=self.model_name)
 
     def vectorize_text(self, text: str) -> np.ndarray:
-        """Векторизует текст и возвращает нормализованный вектор."""
+        """Векторизует один текст. Делегирует в vectorize_batch."""
         if not isinstance(text, str) or not text.strip():
-            raise VectorizationError(message="Input text must be a non-empty string", code="invalid_vectorization_input", status_code=400)
+            raise VectorizationError(
+                message="Input text must be a non-empty string",
+                code="invalid_vectorization_input",
+                status_code=400,
+            )
+        return self.vectorize_batch([text])[0]
 
+    def vectorize_batch(self, texts: list[str]) -> list[np.ndarray]:
+        """Векторизует список текстов за один forward pass.
+
+        Использует Lock для thread-safety: PyTorch не гарантирует
+        корректность при одновременных вызовах из нескольких потоков.
+        """
+        if not texts:
+            return []
         try:
-            logger.debug("vectorize_text_started", model_name=self.model_name, text_length=len(text))
-            inputs = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
+            logger.debug("vectorize_batch_started", model_name=self.model_name, batch_size=len(texts))
+            with self._lock:
+                inputs = self.tokenizer(
+                    texts,
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
+                    max_length=512,
+                )
+                with torch.no_grad():
+                    embeddings = self.model(**inputs).last_hidden_state
 
-            with torch.no_grad():
-                embeddings = self.model(**inputs).last_hidden_state
-
-            mean_embedding = embeddings.mean(dim=1)
-            normalized_embedding = F.normalize(mean_embedding, p=2, dim=1)
-            vector = normalized_embedding.squeeze().numpy()
-            logger.debug("vectorize_text_finished", vector_size=int(vector.shape[0]))
-            return vector
+            mean_embeddings = embeddings.mean(dim=1)
+            normalized = F.normalize(mean_embeddings, p=2, dim=1)
+            vectors = [normalized[i].numpy() for i in range(len(texts))]
+            logger.debug("vectorize_batch_finished", batch_size=len(texts), vector_size=int(vectors[0].shape[0]))
+            return vectors
         except VectorizationError:
             raise
         except Exception as error:

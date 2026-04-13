@@ -32,7 +32,9 @@ class ApiService:
         )
 
         try:
-            query_vector = self.vectorizer.vectorize_text(normalized_query["expanded_query"])
+            # Use the clean normalized query for dense embedding — not the synonym-expanded
+            # version, which would blur the vector representation.
+            query_vector = self.vectorizer.vectorize_text(normalized_query["normalized_query"])
         except VectorizationError:
             raise
         except Exception as error:
@@ -70,22 +72,23 @@ class ApiService:
             document_name=document_name,
             documents_count=len(documents),
         )
-        for index, document in enumerate(documents):
-            content = document.get('content')
-            keywords = document.get('keywords', [])
-            dataframe = document.get('dataframe', None)
-            metadata = document.get('metadata', None)
-            keywords = [kw.lower() for kw in keywords]
 
-            try:
-                content_vector = self.vectorizer.vectorize_text(content)
-            except VectorizationError:
-                raise
-            except Exception as error:
-                raise VectorizationError(
-                    message="Vectorization failed while indexing",
-                    details={"index": index, "reason": str(error)},
-                ) from error
+        contents = [doc.get("content") or "" for doc in documents]
+        try:
+            content_vectors = self.vectorizer.vectorize_batch(contents)
+        except VectorizationError:
+            raise
+        except Exception as error:
+            raise VectorizationError(
+                message="Vectorization failed while indexing",
+                details={"reason": str(error)},
+            ) from error
+
+        for index, (document, content_vector) in enumerate(zip(documents, content_vectors)):
+            content = document.get("content")
+            keywords = [kw.lower() for kw in document.get("keywords", [])]
+            dataframe = document.get("dataframe", None)
+            metadata = document.get("metadata", None)
 
             try:
                 self.qdrant_service.index_document(
@@ -103,6 +106,7 @@ class ApiService:
                     message="Storage failed while indexing",
                     details={"index": index, "reason": str(error)},
                 ) from error
+
         logger.info("index_documents_finished", document_name=document_name, documents_count=len(documents))
         return {"status": "success", "message": f"{len(documents)} documents indexed."}
 
