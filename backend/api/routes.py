@@ -1,5 +1,6 @@
 import io
 import json
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -235,10 +236,13 @@ async def download_document_file(request: Request, document_id: str):
     doc_service = get_document_service(request)
     record = await run_in_threadpool(doc_service.get_document, document_id)
     content = await run_in_threadpool(doc_service.read_content, document_id)
+    # RFC 5987: use filename*=UTF-8''<percent-encoded> for non-ASCII filenames
+    encoded_name = quote(record.file_name or "file", safe="")
+    content_disposition = f"inline; filename*=UTF-8''{encoded_name}"
     return StreamingResponse(
         io.BytesIO(content),
         media_type=record.mime_type or "application/octet-stream",
-        headers={"Content-Disposition": f'inline; filename="{record.file_name}"'},
+        headers={"Content-Disposition": content_disposition},
     )
 
 
