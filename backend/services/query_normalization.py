@@ -22,10 +22,9 @@ def normalize_query(query: str) -> dict:
     for token in tokens:
         expansions.extend(_ALIASES.get(token, []))
 
+    # expanded_terms is used only for lexical/BM25 search — never for dense embedding.
+    # Concatenating synonyms into the query vector blurs the representation.
     expanded_terms = _dedupe([*tokens, *expansions])
-    expanded_query = clean_query
-    if expansions:
-        expanded_query = f"{clean_query}\n\nСинонимы и расширения запроса: {'; '.join(_dedupe(expansions))}"
 
     exact_identifiers = [
         token
@@ -38,7 +37,6 @@ def normalize_query(query: str) -> dict:
         "normalized_query": lowered,
         "query_tokens": tokens,
         "expanded_terms": expanded_terms,
-        "expanded_query": expanded_query,
         "exact_identifiers": _dedupe(exact_identifiers),
     }
 
