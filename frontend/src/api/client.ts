@@ -231,6 +231,7 @@ export async function sendChatMessage(
 export type StreamCallbacks = {
   onDelta?: (value: string) => void;
   onCitations?: (items: ChatSendMessageResponse["assistant_message"]["citations"]) => void;
+  onError?: (code: string, message: string) => void;
 };
 
 export async function streamChatMessage(
@@ -256,36 +257,50 @@ export async function streamChatMessage(
   const reader = response.body.getReader();
   let buffer = "";
   let eventName = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    buffer += decoder.decode(value, { stream: true });
 
-    let separatorIndex = buffer.indexOf("\n\n");
-    while (separatorIndex >= 0) {
-      const chunk = buffer.slice(0, separatorIndex);
-      buffer = buffer.slice(separatorIndex + 2);
-      for (const line of chunk.split("\n")) {
-        if (line.startsWith("event:")) {
-          eventName = line.slice(6).trim();
-        }
-        if (line.startsWith("data:")) {
-          const raw = line.slice(5).trim();
-          try {
-            const payloadData = JSON.parse(raw) as { text?: string; items?: ChatSendMessageResponse["assistant_message"]["citations"] };
-            if (eventName === "delta" && payloadData.text) {
-              callbacks.onDelta?.(payloadData.text);
-            } else if (eventName === "citations" && payloadData.items) {
-              callbacks.onCitations?.(payloadData.items);
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+
+      let separatorIndex = buffer.indexOf("\n\n");
+      while (separatorIndex >= 0) {
+        const chunk = buffer.slice(0, separatorIndex);
+        buffer = buffer.slice(separatorIndex + 2);
+        for (const line of chunk.split("\n")) {
+          if (line.startsWith("event:")) {
+            eventName = line.slice(6).trim();
+          }
+          if (line.startsWith("data:")) {
+            const raw = line.slice(5).trim();
+            try {
+              const payloadData = JSON.parse(raw) as {
+                text?: string;
+                items?: ChatSendMessageResponse["assistant_message"]["citations"];
+                code?: string;
+                message?: string;
+              };
+              if (eventName === "delta" && payloadData.text) {
+                callbacks.onDelta?.(payloadData.text);
+              } else if (eventName === "citations" && payloadData.items) {
+                callbacks.onCitations?.(payloadData.items);
+              } else if (eventName === "error") {
+                callbacks.onError?.(payloadData.code ?? "stream_error", payloadData.message ?? "Stream error");
+                return;
+              }
+            } catch {
+              // ignore malformed SSE line
             }
-          } catch {
-            // ignore malformed line in stream
           }
         }
+        separatorIndex = buffer.indexOf("\n\n");
       }
-      separatorIndex = buffer.indexOf("\n\n");
     }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Network error";
+    callbacks.onError?.("network_error", message);
   }
 }

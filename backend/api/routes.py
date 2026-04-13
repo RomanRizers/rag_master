@@ -356,16 +356,19 @@ async def stream_chat_message(request: Request, payload: ChatMessageRequest, ses
     )
 
     def event_stream():
-        for chunk in token_stream:
-            yield _sse_event("delta", {"text": chunk})
-        yield _sse_event("citations", {"items": citations})
-        yield _sse_event(
-            "done",
-            {
-                "session_id": session_id,
-                "user_message_id": user_message["id"],
-            },
-        )
+        try:
+            for chunk in token_stream:
+                yield _sse_event("delta", {"text": chunk})
+            yield _sse_event("citations", {"items": citations})
+            yield _sse_event(
+                "done",
+                {
+                    "session_id": session_id,
+                    "user_message_id": user_message["id"],
+                },
+            )
+        except Exception as exc:
+            yield _sse_event("error", {"code": "stream_error", "message": str(exc)})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

@@ -180,7 +180,13 @@ export function ChatPage() {
         setStreamCitations([]);
         await streamChatMessage(activeSessionId, payload, {
           onDelta: (value) => setStreamText((current) => current + value),
-          onCitations: (items) => setStreamCitations(items)
+          onCitations: (items) => setStreamCitations(items),
+          onError: (_code, _message) => {
+            setPendingUserMessage(null);
+            setIsResponding(false);
+            setStreamText("");
+            setStreamCitations([]);
+          }
         });
       }
       await queryClient.invalidateQueries({ queryKey: ["chat-messages", activeSessionId] });
