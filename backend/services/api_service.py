@@ -11,7 +11,13 @@ logger = structlog.get_logger("api_service")
 class ApiService:
     def __init__(self, qdrant_service=None, vectorizer=None):
         self.qdrant_service = qdrant_service or QdrantService()
-        self.vectorizer = vectorizer or TextVectorizer()
+        self._vectorizer = vectorizer  # None = lazy init on first use
+
+    @property
+    def vectorizer(self):
+        if self._vectorizer is None:
+            self._vectorizer = TextVectorizer()
+        return self._vectorizer
 
     def search_query(self, query: str, top_k: int, keywords: list = None, filters: dict | None = None):
         """Выполняет поиск по запросу и возвращает результаты."""
