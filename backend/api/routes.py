@@ -31,81 +31,68 @@ from backend.api.schemas import (
     SearchRequest,
 )
 from backend.core.exceptions import ValidationError
-from backend.core.services import AppServices
-from backend.services.api_service import ApiService
-from backend.services.chat_service import ChatService
-from backend.services.document_service import DocumentService
-from backend.services.health_service import HealthService
-from backend.services.ingestion_service import IngestionService
 
 api_router = APIRouter()
-api_service = None
-chat_service = None
-document_service = None
-ingestion_service = None
-health_service = None
+chat_router = APIRouter()
 
 
-def _get_app_services(request: Request) -> AppServices | None:
+# ---------------------------------------------------------------------------
+# Service getters — look in app.state.services (ApiServices or ChatServices)
+# ---------------------------------------------------------------------------
+
+def _get_services(request: Request):
     return getattr(request.app.state, "services", None)
 
 
-def get_api_service(request: Request | None = None):
-    services = _get_app_services(request) if request is not None else None
+def get_api_service(request: Request):
+    services = _get_services(request)
     if services is not None:
         return services.api_service
-    global api_service
-    if api_service is None:
-        api_service = ApiService()
-    return api_service
+    from backend.services.api_service import ApiService
+    return ApiService()
 
 
-def get_chat_service(request: Request | None = None):
-    services = _get_app_services(request) if request is not None else None
+def get_chat_service(request: Request):
+    services = _get_services(request)
     if services is not None:
         return services.chat_service
-    global chat_service
-    if chat_service is None:
-        chat_service = ChatService()
-    return chat_service
+    from backend.services.chat_service import ChatService
+    return ChatService()
 
 
-def get_document_service(request: Request | None = None):
-    services = _get_app_services(request) if request is not None else None
+def get_document_service(request: Request):
+    services = _get_services(request)
     if services is not None:
         return services.document_service
-    global document_service
-    if document_service is None:
-        document_service = DocumentService()
-    return document_service
+    from backend.services.document_service import DocumentService
+    return DocumentService()
 
 
-def get_ingestion_service(request: Request | None = None):
-    services = _get_app_services(request) if request is not None else None
+def get_ingestion_service(request: Request):
+    services = _get_services(request)
     if services is not None:
         return services.ingestion_service
-    global ingestion_service
-    if ingestion_service is None:
-        ingestion_service = IngestionService(
-            document_service=get_document_service(request),
-            api_service=get_api_service(request),
-        )
-    return ingestion_service
+    from backend.services.ingestion_service import IngestionService
+    return IngestionService(
+        document_service=get_document_service(request),
+        api_service=get_api_service(request),
+    )
 
 
-def get_health_service(request: Request | None = None):
-    services = _get_app_services(request) if request is not None else None
+def get_health_service(request: Request):
+    services = _get_services(request)
     if services is not None:
         return services.health_service
-    global health_service
-    if health_service is None:
-        health_service = HealthService()
-    return health_service
+    from backend.services.health_service import HealthService
+    return HealthService()
 
+
+# ---------------------------------------------------------------------------
+# api_router — CRUD: documents, knowledge-bases, jobs, admin, health
+# ---------------------------------------------------------------------------
 
 @api_router.get("/")
 def index():
-    """Health endpoint for backend service."""
     return JSONResponse(content={"status": "ok", "service": "fastapi-backend"})
 
 
@@ -120,32 +107,6 @@ async def health_ready(request: Request):
     payload, ready = await run_in_threadpool(get_health_service(request).ready)
     status_code = 200 if ready else 503
     return JSONResponse(content=payload, status_code=status_code)
-
-
-@api_router.post("/api/searching")
-@api_router.post("/searching")
-async def search(request: Request, payload: SearchRequest, _: None = Depends(ensure_json_content_type)):
-    """Обрабатывает запрос поиска."""
-    results = await run_in_threadpool(
-        get_api_service(request).search_query,
-        payload.query,
-        payload.top_k,
-        payload.keywords,
-        payload.filters.model_dump(exclude_none=True) if payload.filters else None,
-    )
-    return JSONResponse(content=results)
-
-
-@api_router.post("/api/indexing")
-@api_router.post("/indexing")
-async def indexing(request: Request, payload: IndexingRequest, _: None = Depends(ensure_json_content_type)):
-    """Обрабатывает запрос на индексацию документов."""
-    result = await run_in_threadpool(
-        get_api_service(request).index_documents,
-        payload.document_name,
-        [document.model_dump() for document in payload.documents],
-    )
-    return JSONResponse(content=result)
 
 
 @api_router.get("/api/documents")
@@ -310,34 +271,62 @@ async def list_jobs(request: Request, status: str | None = None, document_id: st
     return JSONResponse(content=response.model_dump())
 
 
-@api_router.post("/api/chat/sessions")
+# ---------------------------------------------------------------------------
+# chat_router — AI runtime: search, indexing API, chat sessions
+# ---------------------------------------------------------------------------
+
+@chat_router.post("/api/searching")
+@chat_router.post("/searching")
+async def search(request: Request, payload: SearchRequest, _: None = Depends(ensure_json_content_type)):
+    results = await run_in_threadpool(
+        get_api_service(request).search_query,
+        payload.query,
+        payload.top_k,
+        payload.keywords,
+        payload.filters.model_dump(exclude_none=True) if payload.filters else None,
+    )
+    return JSONResponse(content=results)
+
+
+@chat_router.post("/api/indexing")
+@chat_router.post("/indexing")
+async def indexing(request: Request, payload: IndexingRequest, _: None = Depends(ensure_json_content_type)):
+    result = await run_in_threadpool(
+        get_api_service(request).index_documents,
+        payload.document_name,
+        [document.model_dump() for document in payload.documents],
+    )
+    return JSONResponse(content=result)
+
+
+@chat_router.post("/api/chat/sessions")
 async def create_chat_session(request: Request):
     session = await run_in_threadpool(get_chat_service(request).create_session)
     response = ChatSessionCreateResponse.model_validate(session)
     return JSONResponse(content=response.model_dump())
 
 
-@api_router.get("/api/chat/sessions")
+@chat_router.get("/api/chat/sessions")
 async def list_chat_sessions(request: Request):
     sessions = await run_in_threadpool(get_chat_service(request).list_sessions)
     response = ChatSessionListResponse(sessions=sessions)
     return JSONResponse(content=response.model_dump())
 
 
-@api_router.delete("/api/chat/sessions/{session_id}")
+@chat_router.delete("/api/chat/sessions/{session_id}")
 async def delete_chat_session(request: Request, session_id: str):
     deleted = await run_in_threadpool(get_chat_service(request).delete_session, session_id)
     return JSONResponse(content={"status": "deleted", "session": deleted})
 
 
-@api_router.get("/api/chat/sessions/{session_id}/messages")
+@chat_router.get("/api/chat/sessions/{session_id}/messages")
 async def get_chat_messages(request: Request, session_id: str):
     messages = await run_in_threadpool(get_chat_service(request).get_messages, session_id)
     response = ChatSessionMessagesResponse(session_id=session_id, messages=messages)
     return JSONResponse(content=response.model_dump())
 
 
-@api_router.post("/api/chat/sessions/{session_id}/messages")
+@chat_router.post("/api/chat/sessions/{session_id}/messages")
 async def send_chat_message(request: Request, payload: ChatMessageRequest, session_id: str):
     user_message, assistant_message = await run_in_threadpool(
         get_chat_service(request).send_message,
@@ -355,7 +344,7 @@ async def send_chat_message(request: Request, payload: ChatMessageRequest, sessi
     return JSONResponse(content=response.model_dump())
 
 
-@api_router.post("/api/chat/sessions/{session_id}/messages/stream")
+@chat_router.post("/api/chat/sessions/{session_id}/messages/stream")
 async def stream_chat_message(request: Request, payload: ChatMessageRequest, session_id: str):
     user_message, citations, token_stream = await run_in_threadpool(
         get_chat_service(request).stream_message,
