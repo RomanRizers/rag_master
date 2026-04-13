@@ -4,9 +4,8 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import type { ChatCitation } from "../types";
 
-// Worker is copied to /pdf.worker.min.js by the Dockerfile build stage.
-// Using a plain .js file avoids nginx MIME-type issues with .mjs ES modules.
-pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
+// Worker copied to root by Dockerfile; nginx location ~* \.mjs$ sets correct MIME type.
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 interface Props {
   citation: ChatCitation;
