@@ -60,6 +60,19 @@ class S3StorageAdapter(StorageAdapter):
             if not isinstance(body, bytes):
                 body = bytes(body)
             return body
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] == "NoSuchKey":
+                raise StorageError(
+                    message="Stored document content was not found",
+                    code="storage_error",
+                    details={"bucket": self.bucket, "object_key": object_key},
+                    status_code=404,
+                ) from exc
+            raise StorageError(
+                message="Failed to read document from S3",
+                code="storage_error",
+                details={"bucket": self.bucket, "object_key": object_key},
+            ) from exc
         except Exception as exc:
             raise StorageError(
                 message="Failed to read document from S3",
