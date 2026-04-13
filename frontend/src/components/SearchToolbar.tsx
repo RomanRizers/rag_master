@@ -1,8 +1,5 @@
 import type { FormEvent } from "react";
 
-import type { Language } from "../i18n";
-import type { ThemeMode } from "../theme";
-
 type SearchToolbarCopy = {
   title: string;
   subtitle: string;
@@ -10,36 +7,24 @@ type SearchToolbarCopy = {
   topKLabel: string;
   topKHint: string;
   searchButton: string;
-  themeLabel: string;
-  themeLight: string;
-  themeDark: string;
-  themeSystem: string;
 };
 
 type SearchToolbarProps = {
-  language: Language;
-  onSwitchLanguage: (nextLanguage: Language) => void;
   query: string;
   onQueryChange: (value: string) => void;
   topK: number;
   onTopKChange: (value: number) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  themeMode: ThemeMode;
-  onThemeModeChange: (nextMode: ThemeMode) => void;
   loading: boolean;
   text: SearchToolbarCopy;
 };
 
 export function SearchToolbar({
-  language,
-  onSwitchLanguage,
   query,
   onQueryChange,
   topK,
   onTopKChange,
   onSubmit,
-  themeMode,
-  onThemeModeChange,
   loading,
   text
 }: SearchToolbarProps) {
@@ -51,63 +36,80 @@ export function SearchToolbar({
           <h2>{text.title}</h2>
           <p>{text.subtitle}</p>
         </div>
-        <div className="toolbar-switches">
-          <label className="theme-switch">
-            <span>{text.themeLabel}</span>
-            <select value={themeMode} onChange={(event) => onThemeModeChange(event.target.value as ThemeMode)}>
-              <option value="light">{text.themeLight}</option>
-              <option value="dark">{text.themeDark}</option>
-              <option value="system">{text.themeSystem}</option>
-            </select>
-          </label>
-          <div className="lang-switch" role="group" aria-label="Language switch">
-            <button
-              type="button"
-              className={language === "ru" ? "lang-btn active" : "lang-btn"}
-              onClick={() => onSwitchLanguage("ru")}
-            >
-              RU
-            </button>
-            <button
-              type="button"
-              className={language === "en" ? "lang-btn active" : "lang-btn"}
-              onClick={() => onSwitchLanguage("en")}
-            >
-              EN
-            </button>
-          </div>
-        </div>
       </div>
 
-      <form className="search-panel" onSubmit={onSubmit}>
-        <label className="field field-query">
-          <span>{text.queryPlaceholder}</span>
+      <form className="search-form" onSubmit={onSubmit}>
+        <div className="search-input-wrap">
+          <svg
+            className="search-input-icon"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+            <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
           <input
+            className="search-input"
             type="text"
             value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
+            onChange={(e) => onQueryChange(e.target.value)}
             placeholder={text.queryPlaceholder}
             aria-label={text.queryPlaceholder}
             autoComplete="off"
+            autoFocus
           />
-        </label>
+          {loading && <span className="search-spinner" aria-hidden="true" />}
+        </div>
 
-        <label className="field field-topk">
-          <span>{text.topKLabel}</span>
-          <input
-            type="number"
-            min={1}
-            max={50}
-            value={topK}
-            onChange={(event) => onTopKChange(Math.max(1, Math.min(50, Number(event.target.value || 1))))}
-            aria-label={text.topKHint}
-            title={text.topKHint}
-          />
-        </label>
+        <div className="search-form-footer">
+          <label className="search-topk-label">
+            <span className="meta-label">{text.topKLabel}</span>
+            <div className="search-topk-stepper">
+              <button
+                type="button"
+                className="topk-step-btn"
+                onClick={() => onTopKChange(Math.max(1, topK - 1))}
+                aria-label="Уменьшить"
+              >−</button>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={topK}
+                onChange={(e) => onTopKChange(Math.max(1, Math.min(50, Number(e.target.value || 1))))}
+                aria-label={text.topKHint}
+                title={text.topKHint}
+                className="topk-input"
+              />
+              <button
+                type="button"
+                className="topk-step-btn"
+                onClick={() => onTopKChange(Math.min(50, topK + 1))}
+                aria-label="Увеличить"
+              >+</button>
+            </div>
+          </label>
 
-        <button type="submit" className="primary-button" disabled={loading}>
-          {loading ? "..." : text.searchButton}
-        </button>
+          <button type="submit" className="primary-action search-submit-btn" disabled={loading}>
+            {loading ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span className="chat-spinner" style={{ width: 13, height: 13 }} aria-hidden="true" />
+                Поиск...
+              </span>
+            ) : (
+              <>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2.2" />
+                  <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                </svg>
+                {text.searchButton}
+              </>
+            )}
+          </button>
+        </div>
       </form>
     </section>
   );

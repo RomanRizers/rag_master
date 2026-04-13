@@ -1,20 +1,14 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { ApiRequestError, listKnowledgeBases, searchParagraphs } from "../api/client";
-import { STORAGE_LANG_KEY, copy, type Language } from "../i18n";
-import { getSystemPrefersDark, parseThemeMode, resolveTheme, STORAGE_THEME_KEY, type ThemeMode } from "../theme";
+import { copy, type Language } from "../i18n";
 import { appErrorCopy } from "../utils/appError";
 import { extractKeywords, filterByKeywords, sortResults, type SortMode } from "../utils/search";
 import { ResultCard } from "./ResultCard";
 import { ResultsControls } from "./ResultsControls";
 import { SearchStatus } from "./SearchStatus";
 import { SearchToolbar } from "./SearchToolbar";
-
-function getInitialLanguage(): Language {
-  const saved = localStorage.getItem(STORAGE_LANG_KEY);
-  return saved === "en" ? "en" : "ru";
-}
 
 type CopiedState = Record<string, { content: boolean; keywords: boolean }>;
 
@@ -33,13 +27,10 @@ async function safeCopy(text: string): Promise<boolean> {
 
 type SearchPageProps = {
   embedded?: boolean;
+  language?: Language;
 };
 
-export function SearchPage({ embedded = false }: SearchPageProps) {
-  const [language, setLanguage] = useState<Language>(getInitialLanguage);
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() =>
-    parseThemeMode(localStorage.getItem(STORAGE_THEME_KEY))
-  );
+export function SearchPage({ embedded = false, language = "ru" }: SearchPageProps) {
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState(5);
   const [sortMode, setSortMode] = useState<SortMode>("relevance_desc");
@@ -68,37 +59,6 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
     const source = mutation.data?.results ?? [];
     return sortResults(filterByKeywords(source, selectedKeywords), sortMode);
   }, [mutation.data?.results, selectedKeywords, sortMode]);
-
-  useEffect(() => {
-    function applyTheme() {
-      const nextTheme = resolveTheme(themeMode, getSystemPrefersDark());
-      document.documentElement.setAttribute("data-theme", nextTheme);
-    }
-
-    applyTheme();
-
-    if (themeMode !== "system") {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", applyTheme);
-      return () => mediaQuery.removeEventListener("change", applyTheme);
-    }
-    mediaQuery.addListener(applyTheme);
-    return () => mediaQuery.removeListener(applyTheme);
-  }, [themeMode]);
-
-  function switchLanguage(nextLanguage: Language) {
-    setLanguage(nextLanguage);
-    localStorage.setItem(STORAGE_LANG_KEY, nextLanguage);
-  }
-
-  function switchTheme(nextTheme: ThemeMode) {
-    setThemeMode(nextTheme);
-    localStorage.setItem(STORAGE_THEME_KEY, nextTheme);
-  }
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,10 +128,6 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
   const content = (
     <div className="page-section">
       <SearchToolbar
-        language={language}
-        onSwitchLanguage={switchLanguage}
-        themeMode={themeMode}
-        onThemeModeChange={switchTheme}
         query={query}
         onQueryChange={setQuery}
         topK={topK}
@@ -231,16 +187,21 @@ export function SearchPage({ embedded = false }: SearchPageProps) {
           />
 
           <section className="results-grid">
-            {visibleResults.map((result) => (
-              <ResultCard
+            {visibleResults.map((result, idx) => (
+              <div
                 key={result.id}
-                result={result}
-                query={query}
-                text={text}
-                copiedState={copied[result.id] ?? { content: false, keywords: false }}
-                onCopyContent={() => copyContent(result.id, result.payload.content || "")}
-                onCopyKeywords={() => copyKeywords(result.id, result.payload.keywords ?? [])}
-              />
+                className="result-card-wrapper"
+                style={{ animationDelay: `${idx * 45}ms` }}
+              >
+                <ResultCard
+                  result={result}
+                  query={query}
+                  text={text}
+                  copiedState={copied[result.id] ?? { content: false, keywords: false }}
+                  onCopyContent={() => copyContent(result.id, result.payload.content || "")}
+                  onCopyKeywords={() => copyKeywords(result.id, result.payload.keywords ?? [])}
+                />
+              </div>
             ))}
           </section>
         </>
