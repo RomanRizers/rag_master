@@ -13,6 +13,12 @@ export default defineConfig({
       }
     }
   },
+  optimizeDeps: {
+    include: ["pdfjs-dist"]
+  },
+  worker: {
+    format: "es"
+  },
   test: {
     environment: "node"
   }

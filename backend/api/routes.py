@@ -1,9 +1,8 @@
-import io
 import json
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from backend.api.dependencies import ensure_admin_api_key, ensure_json_content_type
@@ -239,10 +238,15 @@ async def download_document_file(request: Request, document_id: str):
     # RFC 5987: use filename*=UTF-8''<percent-encoded> for non-ASCII filenames
     encoded_name = quote(record.file_name or "file", safe="")
     content_disposition = f"inline; filename*=UTF-8''{encoded_name}"
-    return StreamingResponse(
-        io.BytesIO(content),
+    # Use Response (not StreamingResponse) so Content-Length is set — required
+    # by pdfjs to seek within large PDFs and enable byte-range requests.
+    return Response(
+        content=content,
         media_type=record.mime_type or "application/octet-stream",
-        headers={"Content-Disposition": content_disposition},
+        headers={
+            "Content-Disposition": content_disposition,
+            "Accept-Ranges": "bytes",
+        },
     )
 
 

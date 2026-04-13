@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { ChatCitation } from "../types";
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface Props {
   citation: ChatCitation;
@@ -27,7 +25,7 @@ export function PdfViewerModal({ citation, onClose }: Props) {
   const [numPages, setNumPages] = useState(0);
   const [pageNumber, setPageNumber] = useState(citation.page ?? 1);
   const [scale, setScale] = useState(1.2);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +34,7 @@ export function PdfViewerModal({ citation, onClose }: Props) {
 
   useEffect(() => {
     setPageNumber(citation.page ?? 1);
-    setLoadError(false);
+    setLoadError(null);
   }, [citation]);
 
   useEffect(() => {
@@ -64,6 +62,11 @@ export function PdfViewerModal({ citation, onClose }: Props) {
   }
 
   const isPdf = (citation.document_name ?? "").toLowerCase().endsWith(".pdf");
+
+  function handleLoadError(err: Error) {
+    console.error("[PdfViewerModal] Failed to load PDF:", fileUrl, err);
+    setLoadError(err?.message ?? "Unknown error");
+  }
 
   return (
     <div
@@ -173,7 +176,7 @@ export function PdfViewerModal({ citation, onClose }: Props) {
               <Document
                 file={fileUrl}
                 onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-                onLoadError={() => setLoadError(true)}
+                onLoadError={handleLoadError}
                 loading={
                   <div className="pdf-loading">
                     <span className="chat-spinner" aria-hidden="true" />
@@ -195,7 +198,7 @@ export function PdfViewerModal({ citation, onClose }: Props) {
         ) : (
           <div className="pdf-fallback">
             {loadError ? (
-              <p className="muted">Не удалось загрузить PDF-файл.</p>
+              <p className="muted">Не удалось загрузить PDF-файл.{loadError && <> ({loadError})</>}</p>
             ) : (
               <p className="muted">
                 Просмотр доступен только для PDF-файлов. Документ: <strong>{citation.document_name}</strong>
