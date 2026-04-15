@@ -19,6 +19,7 @@ import {
 } from "../api/client";
 import type { DocumentChunkItem, DocumentItem, JobItem, KnowledgeBaseItem } from "../types";
 import { appErrorCopy, resolveAppError } from "../utils/appError";
+import { useLang } from "../LangContext";
 import { ErrorBanner } from "./ErrorBanner";
 
 type StatsByDocument = Record<
@@ -111,6 +112,7 @@ function chunkPreview(value: string): string {
 
 export function DocumentsPage() {
   const queryClient = useQueryClient();
+  const t = useLang();
   const navigate = useNavigate();
   const params = useParams<{ datasetName?: string; documentId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -464,7 +466,7 @@ export function DocumentsPage() {
   }
 
   function handleRenameKnowledgeBase(currentName: string) {
-    const nextName = window.prompt("Новое имя базы знаний", currentName)?.trim();
+    const nextName = window.prompt(t.datasetRenamePlaceholder, currentName)?.trim();
     if (!nextName || nextName === currentName) {
       return;
     }
@@ -475,7 +477,7 @@ export function DocumentsPage() {
     if (item.document_count > 0) {
       return;
     }
-    if (!window.confirm(`Удалить базу знаний "${item.name}"?`)) {
+    if (!window.confirm(`${t.datasetDeleteConfirm} "${item.name}"?`)) {
       return;
     }
     deleteKnowledgeBaseMutation.mutate(item.name);
@@ -488,8 +490,8 @@ export function DocumentsPage() {
           <div className="panel-head">
             <div>
               <span className="section-kicker">Dataset</span>
-              <h2>Knowledge bases</h2>
-              <p>Выбери базу знаний, затем работай с документами и индексацией внутри отдельного экрана.</p>
+              <h2>{t.datasetTitle}</h2>
+              <p>{t.datasetSubtitle}</p>
             </div>
             <div className="dataset-top-actions">
               <button className="secondary-action" type="button" onClick={() => setIsCreateKnowledgeBaseOpen(true)}>
@@ -507,11 +509,11 @@ export function DocumentsPage() {
                   </div>
                   <div className="stack-xs">
                     <strong className="dataset-card-title">{item.name}</strong>
-                    <span className="muted">{item.document_count} files</span>
+                    <span className="muted">{item.document_count} {t.datasetFiles}</span>
                   </div>
                   <div className="dataset-card-metrics">
-                    <span>{item.chunk_size_tokens} tokens</span>
-                    <span>{item.chunk_keyword_limit} kw/chunk</span>
+                    <span>{item.chunk_size_tokens} {t.datasetTokens}</span>
+                    <span>{item.chunk_keyword_limit} {t.datasetKwChunk}</span>
                   </div>
                 </Link>
                 <div className="dataset-card-actions">
@@ -532,7 +534,7 @@ export function DocumentsPage() {
           </div>
           <div className="dataset-pagination">
             <div className="dataset-page-size">
-              <span>Show</span>
+              <span>{t.datasetShow}</span>
               <select value={datasetPageSize} onChange={(event) => setDatasetPageSize(Number(event.target.value))}>
                 <option value={6}>6</option>
                 <option value={8}>8</option>
@@ -545,7 +547,7 @@ export function DocumentsPage() {
                 Назад
               </button>
               <span>
-                Page {datasetPage} / {datasetPageCount}
+                {t.datasetPage} {datasetPage} / {datasetPageCount}
               </span>
               <button
                 type="button"
@@ -579,7 +581,7 @@ export function DocumentsPage() {
                   <span className="dataset-pill">{selectedDatasetInfo?.profile_mode ?? "balanced"}</span>
                 </div>
                 <h2>{activeKnowledgeBase}</h2>
-                <p>Документы внутри базы знаний. Нажми на документ, чтобы открыть чанки и их keywords.</p>
+                <p>{t.datasetDetailHint}</p>
               </div>
               <div className="dataset-detail-actions">
                 <button type="button" className="secondary-action" onClick={() => setIsSettingsOpen(true)}>
@@ -592,19 +594,19 @@ export function DocumentsPage() {
             </div>
             <div className="dataset-overview-grid">
               <article className="summary-chip-card">
-                <span>Total documents</span>
+                <span>{t.datasetTotalDocs}</span>
                 <strong>{selectedDocuments.length}</strong>
               </article>
               <article className="summary-chip-card">
-                <span>Indexed</span>
+                <span>{t.datasetIndexed}</span>
                 <strong>{indexedDocumentsCount}</strong>
               </article>
               <article className="summary-chip-card">
-                <span>Pending</span>
+                <span>{t.datasetPending}</span>
                 <strong>{pendingDocumentsCount}</strong>
               </article>
               <article className="summary-chip-card">
-                <span>Chunk size</span>
+                <span>{t.datasetChunkSize}</span>
                 <strong>{selectedDatasetInfo?.chunk_size_tokens ?? knowledgeBaseSettings.chunk_size_tokens}</strong>
               </article>
             </div>
@@ -615,12 +617,12 @@ export function DocumentsPage() {
               <form className="upload-form dataset-upload-panel" onSubmit={submitUpload}>
                 <div className="section-head-row">
                   <div>
-                    <h3>Add document</h3>
-                    <p className="muted">Загрузка документа сразу в выбранную базу знаний.</p>
+                    <h3>{t.datasetAddDoc}</h3>
+                    <p className="muted">{t.datasetAddDocHint}</p>
                   </div>
                 </div>
                 <label>
-                  <span>Файл</span>
+                  <span>{t.datasetFile}</span>
                   <input
                     type="file"
                     accept=".txt,.pdf,.docx"
@@ -631,27 +633,27 @@ export function DocumentsPage() {
                   />
                 </label>
                 <label>
-                  <span>Source name</span>
-                  <input type="text" value={sourceName} placeholder="Например: ГОСТ 17375" onChange={(event) => setSourceName(event.target.value)} />
+                  <span>{t.datasetSourceName}</span>
+                  <input type="text" value={sourceName} placeholder={t.datasetSourcePlaceholder} onChange={(event) => setSourceName(event.target.value)} />
                 </label>
                 <label>
-                  <span>Tags</span>
+                  <span>{t.datasetTags}</span>
                   <input type="text" value={tagsText} placeholder="gost, bends" onChange={(event) => setTagsText(event.target.value)} />
                 </label>
                 <button className="primary-action" type="submit" disabled={!file || uploadMutation.isPending}>
-                  {uploadMutation.isPending ? "Загрузка..." : "Add file"}
+                  {uploadMutation.isPending ? t.datasetUploading : t.datasetUpload}
                 </button>
               </form>
 
               <section className="subpanel">
                 <div className="section-head-row">
                   <div>
-                    <h3>Recent jobs</h3>
-                    <p className="muted">Последние операции по этой базе знаний.</p>
+                    <h3>{t.datasetRecentJobs}</h3>
+                    <p className="muted">{t.datasetRecentJobsHint}</p>
                   </div>
                 </div>
                 <div className="jobs-list compact-jobs-list">
-                  {selectedJobs.length === 0 && <p className="muted">Пока нет jobs.</p>}
+                  {selectedJobs.length === 0 && <p className="muted">{t.datasetNoJobs}</p>}
                   {selectedJobs.slice(0, 6).map((job) => (
                     <article className="job-card" key={job.job_id}>
                       <div className="job-head">
@@ -672,13 +674,13 @@ export function DocumentsPage() {
             <section className="dataset-main-stage">
               <div className="section-head-row">
                 <div>
-                  <h3>Documents</h3>
-                  <p className="muted">Открывай документ, чтобы посмотреть чанки и auto-generated keywords.</p>
+                  <h3>{t.datasetDocuments}</h3>
+                  <p className="muted">{t.datasetDocumentsHint}</p>
                 </div>
               </div>
               {selectedDocuments.length === 0 ? (
                 <div className="chat-empty-state">
-                  <p className="muted">В этой базе знаний пока нет документов.</p>
+                  <p className="muted">{t.datasetNoDocuments}</p>
                 </div>
               ) : (
                 <div className="dataset-document-list">
@@ -716,7 +718,7 @@ export function DocumentsPage() {
                               ))}
                             </div>
                           ) : (
-                            <span className="muted">Keywords появятся после индексации.</span>
+                            <span className="muted">{t.datasetKeywordsAfterIndex}</span>
                           )}
                         </div>
                         <div className="dataset-document-meta">
@@ -731,7 +733,7 @@ export function DocumentsPage() {
                             disabled={indexMutation.isPending || hasRunning}
                             onClick={() => indexMutation.mutate(document.document_id)}
                           >
-                            {hasRunning ? "В процессе..." : "Индексировать"}
+                            {hasRunning ? t.datasetIndexInProgress : t.datasetIndexing}
                           </button>
                           <button
                             type="button"
@@ -759,7 +761,7 @@ export function DocumentsPage() {
       return (
         <div className="documents-layout">
           <section className="panel">
-            <p className="muted">Документ не найден в выбранной базе знаний.</p>
+            <p className="muted">{t.datasetDocumentNotFound}</p>
           </section>
         </div>
       );
@@ -796,19 +798,19 @@ export function DocumentsPage() {
 
           <div className="dataset-document-meta-grid">
             <article className="summary-chip-card">
-              <span>Status</span>
+              <span>{t.datasetStatus}</span>
               <strong>{activeDocument.status}</strong>
             </article>
             <article className="summary-chip-card">
-              <span>Source</span>
+              <span>{t.datasetSource}</span>
               <strong>{activeDocument.source_name || "—"}</strong>
             </article>
             <article className="summary-chip-card">
-              <span>Tags</span>
+              <span>{t.datasetTags}</span>
               <strong>{activeDocument.tags.length ? activeDocument.tags.join(", ") : "—"}</strong>
             </article>
             <article className="summary-chip-card">
-              <span>Chunk keywords</span>
+              <span>{t.datasetChunkKeywords}</span>
               <strong>{selectedDatasetInfo?.chunk_keyword_limit ?? knowledgeBaseSettings.chunk_keyword_limit}</strong>
             </article>
           </div>
@@ -816,24 +818,24 @@ export function DocumentsPage() {
           <div className="dataset-chunks-toolbar">
             <div className="section-head-row">
               <div>
-                <h3>Chunks</h3>
-                <p className="muted">Нажми на чанк, чтобы открыть полный текст и keywords.</p>
+                <h3>{t.datasetChunks}</h3>
+                <p className="muted">{t.datasetChunksHint}</p>
               </div>
             </div>
             <input
               type="search"
               value={chunkSearch}
-              placeholder="Поиск по чанкам и keywords"
+              placeholder={t.datasetChunkSearch}
               onChange={(event) => setChunkSearch(event.target.value)}
             />
           </div>
 
           <div className="dataset-chunk-list">
-            {documentChunksQuery.isLoading && <p className="muted">Загрузка чанков...</p>}
+            {documentChunksQuery.isLoading && <p className="muted">{t.datasetLoadingChunks}</p>}
             {documentChunksQuery.isError && (
               <p className="muted">{resolveAppError(documentChunksQuery.error, appErrorCopy.ru).message}</p>
             )}
-            {!documentChunksQuery.isLoading && !visibleChunks.length && <p className="muted">Нет чанков для отображения.</p>}
+            {!documentChunksQuery.isLoading && !visibleChunks.length && <p className="muted">{t.datasetNoChunks}</p>}
             {visibleChunks.map((chunk) => (
               <article
                 key={chunk.chunk_id}
@@ -904,7 +906,7 @@ export function DocumentsPage() {
             <div className="overlay-head">
               <div>
                 <span className="section-kicker">Dataset</span>
-                <h3>Create Knowledge Base</h3>
+                <h3>{t.datasetCreateTitle}</h3>
               </div>
               <button type="button" className="overlay-close" onClick={() => setIsCreateKnowledgeBaseOpen(false)}>
                 ×
@@ -912,11 +914,11 @@ export function DocumentsPage() {
             </div>
             <form className="overlay-form" onSubmit={submitKnowledgeBaseCreate}>
               <label>
-                <span>Name</span>
+                <span>{t.datasetNameLabel}</span>
                 <input
                   type="text"
                   value={newKnowledgeBaseName}
-                  placeholder="Например: СДТ Отводы"
+                  placeholder={t.datasetNamePlaceholder}
                   onChange={(event) => setNewKnowledgeBaseName(event.target.value)}
                 />
               </label>
@@ -925,7 +927,7 @@ export function DocumentsPage() {
                   Отмена
                 </button>
                 <button type="submit" className="primary-action" disabled={createKnowledgeBaseMutation.isPending}>
-                  {createKnowledgeBaseMutation.isPending ? "Создание..." : "Create Knowledge Base"}
+                  {createKnowledgeBaseMutation.isPending ? t.datasetCreating : t.datasetCreate}
                 </button>
               </div>
             </form>
@@ -939,8 +941,8 @@ export function DocumentsPage() {
             <div className="overlay-head">
               <div>
                 <span className="section-kicker">Settings</span>
-                <h3>Knowledge Base Settings</h3>
-                <p className="muted">Одна кнопка открытия, спокойный modal, только то, что реально влияет на индекс.</p>
+                <h3>{t.datasetKBSettings}</h3>
+                <p className="muted">{t.datasetKBSettingsHint}</p>
               </div>
               <button type="button" className="overlay-close" onClick={() => setIsSettingsOpen(false)}>
                 ×
@@ -948,7 +950,7 @@ export function DocumentsPage() {
             </div>
             <form className="overlay-form" onSubmit={submitKnowledgeBaseSettings}>
               <label>
-                <span>Preset</span>
+                <span>{t.datasetPreset}</span>
                 <select
                   value={knowledgeBaseSettings.profile_mode}
                   onChange={(event) => applyProfilePreset(event.target.value as keyof typeof PROFILE_PRESETS)}
@@ -960,7 +962,7 @@ export function DocumentsPage() {
               </label>
               <div className="settings-form-grid">
                 <label>
-                  <span>Chunk size</span>
+                  <span>{t.datasetChunkSize}</span>
                   <input
                     type="number"
                     min={128}
@@ -975,7 +977,7 @@ export function DocumentsPage() {
                   />
                 </label>
                 <label>
-                  <span>Overlap</span>
+                  <span>{t.datasetOverlap}</span>
                   <input
                     type="number"
                     min={0}
@@ -990,7 +992,7 @@ export function DocumentsPage() {
                   />
                 </label>
                 <label>
-                  <span>Keywords per chunk</span>
+                  <span>{t.datasetKeywordsPerChunk}</span>
                   <input
                     type="number"
                     min={1}
@@ -1012,10 +1014,10 @@ export function DocumentsPage() {
                   disabled={reindexKnowledgeBaseMutation.isPending}
                   onClick={() => reindexKnowledgeBaseMutation.mutate(activeKnowledgeBase)}
                 >
-                  {reindexKnowledgeBaseMutation.isPending ? "Реиндексация..." : "Reindex all"}
+                  {reindexKnowledgeBaseMutation.isPending ? t.datasetReindexing : t.datasetReindex}
                 </button>
                 <button type="submit" className="primary-action" disabled={updateKnowledgeBaseMutation.isPending}>
-                  {updateKnowledgeBaseMutation.isPending ? "Сохранение..." : "Save settings"}
+                  {updateKnowledgeBaseMutation.isPending ? t.datasetSaving : t.datasetSaveSettings}
                 </button>
               </div>
             </form>
