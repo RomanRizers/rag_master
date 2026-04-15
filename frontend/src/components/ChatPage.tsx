@@ -15,14 +15,22 @@ import {
 } from "../api/client";
 import type { ChatCitation, ChatMessage } from "../types";
 import { appErrorCopy } from "../utils/appError";
+import { useLang } from "../LangContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { PdfViewerModal } from "./PdfViewerModal";
 
-function formatIso(value?: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+function makeFormatIso(t: ReturnType<typeof useLang>) {
+  return function formatIso(value?: string | null): string {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    const now = new Date();
+    const diff = (now.getTime() - date.getTime()) / 1000;
+    if (diff < 60) return t.justNow;
+    if (diff < 3600) return `${Math.floor(diff / 60)} ${t.minAgo}`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} ${t.hoursAgo}`;
+    return date.toLocaleDateString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  };
 }
 
 function CitationCard({
@@ -77,8 +85,9 @@ function CitationCard({
 }
 
 function TypingDots() {
+  const t = useLang();
   return (
-    <span className="typing-dots" aria-label="Печатает...">
+    <span className="typing-dots" aria-label={t.chatTyping}>
       <span />
       <span />
       <span />
@@ -86,8 +95,86 @@ function TypingDots() {
   );
 }
 
+function KBSelectorModal({
+  knowledgeBases,
+  selected,
+  onToggle,
+  onClear,
+  onClose
+}: {
+  knowledgeBases: { name: string; document_count: number }[];
+  selected: string[];
+  onToggle: (name: string) => void;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  const t = useLang();
+  const hint = selected.length === 0
+    ? t.kbModalHintAll
+    : t.kbModalHintSelected.replace("{n}", String(selected.length)).replace("{total}", String(knowledgeBases.length));
+
+  return (
+    <div className="kb-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={t.kbModalTitle}>
+      <div className="kb-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="kb-modal-header">
+          <div>
+            <p className="section-kicker">{t.filterLabel}</p>
+            <h3>{t.kbModalTitle}</h3>
+          </div>
+          <button type="button" className="kb-modal-close" onClick={onClose} aria-label={t.chatClearCancel}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <p className="kb-modal-hint muted">{hint}</p>
+
+        {knowledgeBases.length === 0 ? (
+          <div className="kb-modal-empty muted">{t.kbModalEmpty}</div>
+        ) : (
+          <div className="kb-modal-grid">
+            {knowledgeBases.map((kb) => {
+              const active = selected.includes(kb.name);
+              return (
+                <button
+                  key={kb.name}
+                  type="button"
+                  className={`kb-modal-chip ${active ? "active" : ""}`}
+                  onClick={() => onToggle(kb.name)}
+                >
+                  <span className="kb-modal-chip-check" aria-hidden="true">
+                    {active ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                        <path d="M20 6 9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : null}
+                  </span>
+                  <span className="kb-modal-chip-name">{kb.name}</span>
+                  <span className="kb-modal-chip-count">{kb.document_count} {t.kbDoc}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="kb-modal-footer">
+          <button type="button" className="ghost-action" onClick={onClear} disabled={selected.length === 0}>
+            {t.kbModalReset}
+          </button>
+          <button type="button" className="primary-action" onClick={onClose}>
+            {t.kbModalApply}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ChatPage() {
   const queryClient = useQueryClient();
+  const t = useLang();
+  const formatIso = makeFormatIso(t);
 
   const [activeSessionId, setActiveSessionId] = useState<string>("");
   const [message, setMessage] = useState("");
@@ -102,7 +189,10 @@ export function ChatPage() {
   const [isResponding, setIsResponding] = useState(false);
   const [activeCitation, setActiveCitation] = useState<ChatCitation | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [kbModalOpen, setKbModalOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const sessionsQuery = useQuery({
     queryKey: ["chat-sessions"],
@@ -127,6 +217,8 @@ export function ChatPage() {
     onSuccess: (payload) => {
       setActiveSessionId(payload.session_id);
       queryClient.invalidateQueries({ queryKey: ["chat-sessions"] });
+      // Open KB modal when creating a new session
+      setKbModalOpen(true);
     }
   });
 
@@ -148,11 +240,11 @@ export function ChatPage() {
   const sendMutation = useMutation({
     mutationFn: async (submission: { cleanMessage: string }) => {
       if (!activeSessionId) {
-        throw new ApiRequestError("Сначала выберите или создайте сессию", "session_missing");
+        throw new ApiRequestError(t.msgSessionMissing, "session_missing");
       }
       const cleanMessage = submission.cleanMessage;
       if (!cleanMessage) {
-        throw new ApiRequestError("Введите сообщение", "message_required");
+        throw new ApiRequestError(t.msgMessageRequired, "message_required");
       }
       const documentNames = docNamesText
         .split(",")
@@ -214,6 +306,14 @@ export function ChatPage() {
     }
   }, [activeSessionId, sessionsQuery.data?.sessions]);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [message]);
+
   const messages = messagesQuery.data?.messages ?? [];
   const shownMessages = useMemo(() => {
     const items = [...messages];
@@ -230,7 +330,6 @@ export function ChatPage() {
     return items;
   }, [isResponding, messages, pendingUserMessage, streamCitations, streamText]);
 
-  // Auto-scroll to bottom when messages or streaming text changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [shownMessages.length, streamText]);
@@ -274,16 +373,35 @@ export function ChatPage() {
         <aside className="panel chat-sidebar">
           <div className="chat-sidebar-head">
             <div className="stack-xs">
-              <span className="section-kicker">Chat</span>
-              <h2>Conversations</h2>
-              <p className="muted">Выбери сессию или создай новую.</p>
+              <span className="section-kicker">{t.chatSessions}</span>
+              <h2>{t.chatDialogues}</h2>
             </div>
-            <button className="primary-action" type="button" onClick={() => createSessionMutation.mutate()}>
-              + Новая сессия
+            <button
+              className="primary-action"
+              type="button"
+              disabled={createSessionMutation.isPending}
+              onClick={() => createSessionMutation.mutate()}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
+              {t.chatNewSession}
             </button>
           </div>
 
           <div className="session-list">
+            {sessionsQuery.isLoading && (
+              <>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="session-skeleton" />
+                ))}
+              </>
+            )}
+            {!sessionsQuery.isLoading && sessions.length === 0 && (
+              <p className="muted" style={{ fontSize: "0.83rem", textAlign: "center", padding: "12px 0" }}>
+                {t.chatNoSessions}
+              </p>
+            )}
             {sessions.map((session) => (
               <div
                 key={session.session_id}
@@ -294,10 +412,15 @@ export function ChatPage() {
                   className="session-item-main"
                   onClick={() => setActiveSessionId(session.session_id)}
                 >
-                  <span className="session-kicker">Session</span>
-                  <strong>{session.session_id.slice(0, 8)}</strong>
-                  <span>{session.message_count} msg</span>
-                  <span>{formatIso(session.last_message_at ?? session.created_at)}</span>
+                  <div className="session-item-avatar" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <div className="session-item-info">
+                    <strong className="session-item-id">#{session.session_id.slice(0, 8)}</strong>
+                    <span className="session-item-meta">{session.message_count} {t.sessMsg} · {formatIso(session.last_message_at ?? session.created_at)}</span>
+                  </div>
                 </button>
                 <button
                   type="button"
@@ -320,35 +443,66 @@ export function ChatPage() {
 
         {/* Main chat shell */}
         <section className="panel chat-shell">
+          {/* Header */}
           <div className="chat-thread-head">
             <div className="chat-thread-copy">
-              <div className="stack-xs">
-                <span className="section-kicker">Conversation</span>
-                <h2>{activeSession ? `Session ${activeSession.session_id.slice(0, 8)}` : "Chat"}</h2>
+              <div className="chat-session-title">
+                <span className="section-kicker">Chat</span>
+                <span className="chat-session-id">{activeSession ? `#${activeSession.session_id.slice(0, 8)}` : "—"}</span>
               </div>
               <div className="chat-thread-meta">
                 <span className="chip chip-primary">top_k {topK}</span>
-                <span className="chip">{streaming ? "streaming" : "sync mode"}</span>
-                <span className="chip">
-                  {activeSession ? `${activeSession.message_count} msg` : "нет сессии"}
-                </span>
-                <span className="chip">
+                <span className="chip">{streaming ? "streaming" : "sync"}</span>
+                {activeSession && (
+                  <span className="chip">{activeSession.message_count} {t.sessMsg}</span>
+                )}
+                <button
+                  type="button"
+                  className={`kb-scope-chip ${selectedKnowledgeBases.length > 0 ? "kb-scope-chip--active" : ""}`}
+                  onClick={() => setKbModalOpen(true)}
+                  title={t.chatSelectKBs}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <ellipse cx="12" cy="6" rx="8" ry="3" stroke="currentColor" strokeWidth="2" />
+                    <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6" stroke="currentColor" strokeWidth="2" />
+                    <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" stroke="currentColor" strokeWidth="2" />
+                  </svg>
                   {selectedKnowledgeBases.length > 0
                     ? `${selectedKnowledgeBases.length} KB`
-                    : "all KBs"}
-                </span>
+                    : t.chatAllKBs}
+                </button>
               </div>
             </div>
             <div className="chat-thread-actions">
-              {activeSessionId && (
+              {activeSessionId && !confirmClear && (
                 <button
                   type="button"
                   className="ghost-action compact-delete-action"
                   disabled={sendMutation.isPending || deleteSessionMutation.isPending}
-                  onClick={() => deleteSessionMutation.mutate(activeSessionId)}
+                  onClick={() => setConfirmClear(true)}
                 >
-                  Очистить
+                  {t.chatClear}
                 </button>
+              )}
+              {confirmClear && (
+                <div className="confirm-clear-row">
+                  <span className="confirm-clear-label">{t.chatClearConfirm}</span>
+                  <button
+                    type="button"
+                    className="danger-action confirm-clear-yes"
+                    disabled={deleteSessionMutation.isPending}
+                    onClick={() => { deleteSessionMutation.mutate(activeSessionId); setConfirmClear(false); }}
+                  >
+                    Да
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-action confirm-clear-no"
+                    onClick={() => setConfirmClear(false)}
+                  >
+                    Отмена
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -371,51 +525,40 @@ export function ChatPage() {
             />
           )}
 
-          {/* KB context bar */}
-          <div className="chat-context-bar">
-            <div className="filter-headline">
-              <div>
-                <span className="meta-label">Knowledge base scope</span>
-                <p className="muted">Выбери одну или несколько баз знаний для ответа.</p>
-              </div>
-              {selectedKnowledgeBases.length > 0 && (
-                <button type="button" className="text-button" onClick={() => setSelectedKnowledgeBases([])}>
-                  Сбросить
-                </button>
-              )}
-            </div>
-            <div className="keyword-chips">
-              {knowledgeBases.map((item) => (
-                <button
-                  key={item.name}
-                  type="button"
-                  className={`keyword-chip ${selectedKnowledgeBases.includes(item.name) ? "active" : ""}`}
-                  onClick={() => toggleKnowledgeBase(item.name)}
-                >
-                  {item.name} ({item.document_count})
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Streaming progress bar */}
           {isResponding && <div className="stream-progress-bar" aria-hidden="true" />}
 
           {/* Messages */}
+          <div className="chat-messages-wrapper">
           <div className="messages-list chat-messages-list">
             {shownMessages.length === 0 && (
               <div className="chat-empty-state">
                 <div className="chat-empty-icon" aria-hidden="true">
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                  <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
                     <path
                       d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
                       stroke="currentColor"
-                      strokeWidth="1.5"
+                      strokeWidth="1.2"
                       strokeLinejoin="round"
                     />
                   </svg>
                 </div>
-                <p className="muted">Выберите сессию и отправьте первое сообщение.</p>
+                <div className="chat-empty-text">
+                  <p style={{ fontWeight: 700, margin: 0 }}>{t.chatEmptyTitle}</p>
+                  <p className="muted" style={{ margin: 0 }}>{t.chatEmptyHint}</p>
+                </div>
+                <div className="chat-empty-suggestions">
+                  {[t.chatSuggestion1, t.chatSuggestion2, t.chatSuggestion3].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      className="chat-suggestion-chip"
+                      onClick={() => { setMessage(s); textareaRef.current?.focus(); }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -438,16 +581,15 @@ export function ChatPage() {
                           <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 12a7 7 0 0 1-5.5-2.7c.8-1.4 2.8-2.3 5.5-2.3s4.7.9 5.5 2.3A7 7 0 0 1 12 18z" />
                         </svg>
                       )}
-                      <strong>{item.role === "user" ? "Вы" : "Ассистент"}</strong>
+                      <strong>{item.role === "user" ? t.chatYou : t.chatAssistant}</strong>
                     </div>
                     <span className="message-time">{formatIso(item.created_at)}</span>
                   </header>
 
-                  {/* Streaming indicator */}
                   {item.id === "__streaming__" && !streamText && (
                     <div className="chat-responding-line">
                       <TypingDots />
-                      <span>Думаю...</span>
+                      <span>{t.chatThinking}</span>
                     </div>
                   )}
 
@@ -456,17 +598,19 @@ export function ChatPage() {
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {item.content}
                       </ReactMarkdown>
+                      {item.id === "__streaming__" && streamText && (
+                        <span className="stream-cursor" aria-hidden="true" />
+                      )}
                     </div>
                   )}
 
-                  {/* Citations */}
                   {item.citations.length > 0 && (
                     <div className="citations-section">
                       <span className="citations-label">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                           <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm1 14H11v-5h2v5zm0-7H11V7h2v2z" />
                         </svg>
-                        Источники ({item.citations.length})
+                        {t.chatSources} ({item.citations.length})
                       </span>
                       <ul className="citations-list">
                         {item.citations.map((citation, index) => (
@@ -485,17 +629,20 @@ export function ChatPage() {
             ))}
             <div ref={messagesEndRef} />
           </div>
+          </div>
 
           {/* Composer */}
           <form className="chat-composer" onSubmit={submitMessage}>
-            <div className="chat-composer-main">
-              <label className="chat-message-field">
-                <span>Сообщение</span>
+            <div className="chat-composer-inner">
+              <div className="chat-textarea-wrap">
                 <textarea
-                  rows={4}
+                  ref={textareaRef}
+                  className="chat-textarea"
+                  rows={1}
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
-                  placeholder="Сформулируйте вопрос по документам..."
+                  placeholder={t.chatPlaceholder}
+                  disabled={!activeSessionId || sendMutation.isPending}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                       e.preventDefault();
@@ -503,31 +650,77 @@ export function ChatPage() {
                     }
                   }}
                 />
-              </label>
-            </div>
+                {message.length > 60 && (
+                  <span className={`char-counter ${message.length > 1000 ? "char-counter--warn" : ""}`}>
+                    {message.length}
+                  </span>
+                )}
+              </div>
 
-            <div className="chat-composer-controls">
-              <button
-                type="button"
-                className={`composer-toggle-btn ${composerOpen ? "open" : ""}`}
-                onClick={() => setComposerOpen((v) => !v)}
-                aria-expanded={composerOpen}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                </svg>
-                Параметры
-                <svg
-                  className="composer-toggle-chevron"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
+              <div className="chat-composer-toolbar">
+                <div className="chat-composer-toolbar-left">
+                  <button
+                    type="button"
+                    className={`composer-toggle-btn ${composerOpen ? "open" : ""}`}
+                    onClick={() => setComposerOpen((v) => !v)}
+                    aria-expanded={composerOpen}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3" fill="currentColor" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" strokeWidth="2" />
+                    </svg>
+                    {t.chatParams}
+                    <svg
+                      className="composer-toggle-chevron"
+                      width="11"
+                      height="11"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`kb-pick-btn ${selectedKnowledgeBases.length > 0 ? "kb-pick-btn--active" : ""}`}
+                    onClick={() => setKbModalOpen(true)}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <ellipse cx="12" cy="6" rx="8" ry="3" stroke="currentColor" strokeWidth="2" />
+                      <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6" stroke="currentColor" strokeWidth="2" />
+                      <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" stroke="currentColor" strokeWidth="2" />
+                    </svg>
+                    {selectedKnowledgeBases.length > 0
+                      ? `${selectedKnowledgeBases.length} база`
+                      : t.chatKBs}
+                  </button>
+                </div>
+
+                <div className="chat-composer-toolbar-right">
+                  <span className="composer-hint muted">Ctrl+Enter</span>
+                  <button
+                    className="send-btn primary-action"
+                    type="submit"
+                    disabled={sendMutation.isPending || !activeSessionId}
+                  >
+                    {sendMutation.isPending ? (
+                      <span className="send-btn-inner">
+                        <span className="chat-spinner" aria-hidden="true" />
+                        {t.chatSending}
+                      </span>
+                    ) : (
+                      <span className="send-btn-inner">
+                        {t.chatSend}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </div>
 
               {composerOpen && (
                 <div className="composer-advanced">
@@ -569,33 +762,21 @@ export function ChatPage() {
                   </label>
                 </div>
               )}
-
-              <div className="chat-composer-actions">
-                <span className="muted" style={{ fontSize: "0.76rem" }}>Ctrl+Enter</span>
-                <button
-                  className="primary-action send-btn"
-                  type="submit"
-                  disabled={sendMutation.isPending || !activeSessionId}
-                >
-                  {sendMutation.isPending ? (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <span className="chat-spinner" aria-hidden="true" style={{ width: 12, height: 12 }} />
-                      Отправка...
-                    </span>
-                  ) : (
-                    <>
-                      Отправить
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
           </form>
         </section>
       </div>
+
+      {/* KB Selector Modal */}
+      {kbModalOpen && (
+        <KBSelectorModal
+          knowledgeBases={knowledgeBases}
+          selected={selectedKnowledgeBases}
+          onToggle={toggleKnowledgeBase}
+          onClear={() => setSelectedKnowledgeBases([])}
+          onClose={() => setKbModalOpen(false)}
+        />
+      )}
 
       {/* PDF Viewer Modal */}
       {activeCitation && (
