@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.vscode
+.idea
+qdrant_collections
+node_modules
+frontend/node_modules
+frontend/dist
+frontend/.vite

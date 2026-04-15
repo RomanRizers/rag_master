@@ -1,0 +1,35 @@
+[project]
+name = "rag-master"
+version = "0.1.0"
+description = "Paragraph search service based on FastAPI + Qdrant + E5 embeddings"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic",
+    "boto3",
+    "fastapi",
+    "pandas",
+    "psycopg[binary]",
+    "pypdf",
+    "python-multipart",
+    "qdrant-client",
+    "structlog",
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "tqdm",
+    "transformers",
+    "uvicorn",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

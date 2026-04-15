@@ -1,34 +1,182 @@
-version: "3.8"
 services:
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend-app
+      - chat
+    networks:
+      - qdrant-network
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant
     ports:
       - "6334:6333"
     volumes:
-      - ./qdrant_collections/collections:/qdrant/storage/collections  # монтируем локальную папку коллекций
+      - qdrant-storage:/qdrant/storage
     environment:
-      - QDRANT_HTTP_PORT=6333 
+      - QDRANT_HTTP_PORT=6333
       - QDRANT_GRPC_PORT=6335
     networks:
       - qdrant-network
 
-  flask-app:
-    build: .
-    container_name: flask
+  backend-app:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: backend
     ports:
-      - "5000:5000"
+      - "5002:5000"
     volumes:
-      - .:/app 
+      - .:/app
+      - documents-storage:/tmp/rag_documents
     environment:
-      - FLASK_APP=app.app:create_app
-      - FLASK_RUN_HOST=0.0.0.0
+      - POSTGRES_DSN=${POSTGRES_DSN:-postgresql://rag:rag@postgres:5432/rag}
+      - CHAT_STORE_BACKEND=${CHAT_STORE_BACKEND:-postgres}
+      - JOB_STORE_BACKEND=${JOB_STORE_BACKEND:-postgres}
+      - DOCUMENT_STORE_BACKEND=${DOCUMENT_STORE_BACKEND:-postgres}
+      - UV_PROJECT_ENVIRONMENT=/opt/venv
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
+      - DOCUMENTS_STORAGE_PATH=${DOCUMENTS_STORAGE_PATH:-/tmp/rag_documents}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-minioadmin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-rag-documents}
+      - S3_REGION=${S3_REGION:-us-east-1}
+      - S3_AUTO_CREATE_BUCKET=${S3_AUTO_CREATE_BUCKET:-1}
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
     depends_on:
-      - qdrant
-    command: flask run --host=0.0.0.0
+      qdrant:
+        condition: service_started
+      minio:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    command: sh -c "uv run alembic upgrade head && uv run uvicorn backend.main:app --host 0.0.0.0 --port 5000"
+    networks:
+      - qdrant-network
+
+  chat:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: chat
+    ports:
+      - "5001:5001"
+    volumes:
+      - .:/app
+      - hf-cache:/root/.cache/huggingface
+    environment:
+      - POSTGRES_DSN=${POSTGRES_DSN:-postgresql://rag:rag@postgres:5432/rag}
+      - CHAT_STORE_BACKEND=${CHAT_STORE_BACKEND:-postgres}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
+      - LOCAL_LLM_BASE_URL=${LOCAL_LLM_BASE_URL:-}
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-}
+      - LOCAL_LLM_API_KEY=${LOCAL_LLM_API_KEY:-}
+      - LLM_REQUEST_TIMEOUT_SECONDS=${LLM_REQUEST_TIMEOUT_SECONDS:-60}
+      - HEALTHCHECK_LLM_ACTIVE_PROBE=${HEALTHCHECK_LLM_ACTIVE_PROBE:-0}
+      - HEALTHCHECK_LLM_TIMEOUT_SECONDS=${HEALTHCHECK_LLM_TIMEOUT_SECONDS:-2.0}
+      - UV_PROJECT_ENVIRONMENT=/opt/venv
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/root/.cache/huggingface
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+    depends_on:
+      qdrant:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    command: sh -c "uv run uvicorn backend.chat_main:app --host 0.0.0.0 --port 5001"
+    networks:
+      - qdrant-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: worker
+    volumes:
+      - .:/app
+      - hf-cache:/root/.cache/huggingface
+      - documents-storage:/tmp/rag_documents
+    environment:
+      - POSTGRES_DSN=${POSTGRES_DSN:-postgresql://rag:rag@postgres:5432/rag}
+      - JOB_STORE_BACKEND=${JOB_STORE_BACKEND:-postgres}
+      - DOCUMENT_STORE_BACKEND=${DOCUMENT_STORE_BACKEND:-postgres}
+      - UV_PROJECT_ENVIRONMENT=/opt/venv
+      - HF_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/root/.cache/huggingface
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
+      - DOCUMENTS_STORAGE_PATH=${DOCUMENTS_STORAGE_PATH:-/tmp/rag_documents}
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-minioadmin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-minioadmin}
+      - S3_BUCKET=${S3_BUCKET:-rag-documents}
+      - S3_REGION=${S3_REGION:-us-east-1}
+      - S3_AUTO_CREATE_BUCKET=${S3_AUTO_CREATE_BUCKET:-1}
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - INGESTION_WORKER_POLL_SECONDS=${INGESTION_WORKER_POLL_SECONDS:-1.0}
+    depends_on:
+      backend-app:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      minio:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    command: sh -c "uv run python -m backend.worker.main"
+    networks:
+      - qdrant-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${S3_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - qdrant-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-rag}
+      - POSTGRES_USER=${POSTGRES_USER:-rag}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-rag}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag} -d ${POSTGRES_DB:-rag}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     networks:
       - qdrant-network
 
 networks:
   qdrant-network:
     driver: bridge
+
+volumes:
+  hf-cache:
+  qdrant-storage:
+  documents-storage:
+  minio-data:
+  postgres-data:

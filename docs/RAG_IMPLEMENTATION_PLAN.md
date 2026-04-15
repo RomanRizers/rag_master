@@ -1,0 +1,509 @@
+# RAG Implementation Plan (Execution-Ready)
+
+## 1. Цель и критерии успеха
+
+### Цель v1
+Собрать полноценный single-tenant Chat RAG:
+- загрузка PDF/DOCX;
+- парсинг и нормализация текста;
+- чанкинг и индексация в Qdrant;
+- чат с потоковой генерацией ответа (SSE) и цитатами источников;
+- интеграция LLM через OpenAI-compatible протокол с переменными `OPENROUTER_*`.
+
+### Критерии готовности v1
+- Пользователь может загрузить документ, запустить индексацию и получить статус задачи.
+- Индексируемый контент доступен в retrieval без ручных операций.
+- Чат-ответы отдаются stream-ом с цитатами (документ/страница/чанк/фрагмент).
+- Ошибки ingestion и chat возвращаются в стандартизованном формате.
+- Интеграционные тесты (Go) и backend unit-тесты (Python) покрывают критический путь.
+
+### SLO/метрики v1 (целевые)
+- `p95 /api/chat/.../messages` < 8s до первого токена.
+- `p95 retrieval` < 700ms.
+- `ingestion job fail rate` < 2% (без учета битых файлов).
+- `5xx rate` < 1%.
+
+## 2. Архитектура (фиксированные решения)
+
+### Компоненты
+- `frontend` (React): upload, jobs, chat UI, citations.
+- `backend-api` (FastAPI): API, orchestration, SSE-streaming.
+- `worker` (Python): async ingestion pipeline.
+- `postgres` (системные данные): документы, джобы, чаты.
+- `qdrant` (векторный индекс): чанки и embeddings.
+- `s3-compatible` (MinIO/S3): оригиналы файлов и артефакты парсинга.
+
+### Сквозные потоки
+1. **Ingestion**
+   - upload -> record `documents` -> create `ingestion_job` -> worker parse/chunk/embed/upsert -> update job status.
+2. **Chat**
+   - user message -> query embedding -> retrieve topK -> rerank topN -> prompt assembly -> LLM stream -> citations.
+
+### Single source of truth
+- Метаданные и статусы: PostgreSQL.
+- Бинарные файлы: S3-compatible storage.
+- Retrieval контекст: Qdrant.
+
+## 3. API контракты
+
+## 3.1 Upload и indexing
+- `POST /api/documents/upload` (multipart/form-data)
+  - поля: `file`, `source_name` (optional), `tags[]` (optional).
+  - `201`:
+    - `document_id`
+    - `file_name`
+    - `mime_type`
+    - `size_bytes`
+    - `status` = `uploaded`
+- `POST /api/documents/{document_id}/index`
+  - `202`:
+    - `job_id`
+    - `status` = `queued`
+- `GET /api/documents/{document_id}/index-stats`
+  - `200`:
+    - `document_id`
+    - `status`
+    - `chunks_count`
+    - `latest_job` (nullable)
+- `POST /api/admin/index/orphans/cleanup`
+  - request: `{ "dry_run": true|false }`
+  - headers: `X-Admin-API-Key: <ADMIN_API_KEY>`
+  - `200`:
+    - `dry_run`
+    - `indexed_documents_count`
+    - `existing_documents_count`
+    - `orphan_document_ids`
+    - `deleted_documents_count`
+  - `401`:
+    - `error.code = unauthorized`
+- `GET /api/jobs/{job_id}`
+  - `200`:
+    - `job_id`
+    - `status`: `queued|running|done|failed`
+    - `progress`: `0..100`
+    - `error_code` (nullable)
+    - `error_message` (nullable)
+    - `started_at`, `finished_at`
+
+## 3.2 Chat
+- `POST /api/chat/sessions`
+  - `201`: `session_id`, `created_at`
+- `POST /api/chat/sessions/{session_id}/messages`
+  - request:
+    - `message` (string)
+    - `top_k` (optional)
+    - `filters` (optional, doc tags/names)
+  - response:
+    - `text/event-stream` (SSE)
+    - events:
+      - `delta` (token chunk)
+      - `citations` (final array)
+      - `done`
+      - `error`
+- `GET /api/chat/sessions/{session_id}/messages`
+  - `200`: список сообщений (user/assistant), включая citations у assistant.
+
+## 3.3 Health/readiness
+- `GET /health/live` -> процесс поднят.
+- `GET /health/ready` -> backend может работать (Postgres/Qdrant/S3/LLM config checks).
+
+## 3.4 Error shape (единый формат)
+```json
+{
+  "error": {
+    "code": "string_machine_code",
+    "message": "human_message",
+    "details": {}
+  }
+}
+```
+
+Ключевые коды:
+- `invalid_file_type`
+- `file_too_large`
+- `parsing_failed`
+- `chunking_failed`
+- `embedding_failed`
+- `storage_error`
+- `retrieval_failed`
+- `llm_unavailable`
+- `internal_error`
+- `rate_limited`
+
+## 4. Модель данных
+
+## 4.1 PostgreSQL таблицы
+
+### `documents`
+- `id` (uuid, pk)
+- `original_file_name` (text)
+- `stored_object_key` (text, unique)
+- `mime_type` (text)
+- `size_bytes` (bigint)
+- `status` (`uploaded|indexing|indexed|failed`)
+- `meta` (jsonb)
+- `created_at`, `updated_at`
+
+### `ingestion_jobs`
+- `id` (uuid, pk)
+- `document_id` (uuid, fk -> documents.id)
+- `status` (`queued|running|done|failed`)
+- `progress` (int)
+- `attempt` (int)
+- `error_code` (text nullable)
+- `error_message` (text nullable)
+- `created_at`, `started_at`, `finished_at`
+
+### `chunks_meta`
+- `id` (uuid, pk)
+- `document_id` (uuid, fk)
+- `qdrant_point_id` (text, unique)
+- `chunk_index` (int)
+- `token_count` (int)
+- `page` (int nullable)
+- `section` (text nullable)
+- `content_preview` (text)
+- `created_at`
+
+### `chat_sessions`
+- `id` (uuid, pk)
+- `title` (text nullable)
+- `created_at`, `updated_at`
+
+### `chat_messages`
+- `id` (uuid, pk)
+- `session_id` (uuid, fk)
+- `role` (`user|assistant|system`)
+- `content` (text)
+- `citations` (jsonb nullable)
+- `created_at`
+
+## 4.2 Qdrant payload для чанка
+- `document_id`
+- `document_name`
+- `chunk_id`
+- `chunk_index`
+- `page` (nullable)
+- `section` (nullable)
+- `text`
+- `source_uri`
+
+## 5. Ingestion pipeline (worker)
+
+## 5.1 Очередь и воркер
+- Индексация только async.
+- Каждый job идемпотентен:
+  - повторная индексация документа удаляет/деактивирует старые чанки документа в Qdrant.
+- Retry policy:
+  - max 3 попытки для временных ошибок (`storage_error`, сетевые, таймауты).
+  - без retry для `invalid_file_type` и битых файлов.
+
+## 5.2 Парсинг
+- PDF parser:
+  - page-aware extraction (сохранить mapping chunk -> page).
+- DOCX parser:
+  - извлекать заголовки, абзацы, таблицы как линейный текст с маркерами секций.
+- Нормализация:
+  - trim, collapse whitespace, удаление пустых блоков.
+
+## 5.3 Чанкинг
+- Token-aware:
+  - `chunk_size_tokens = 600`
+  - `chunk_overlap_tokens = 120`
+- Гарантии:
+  - чанк не пустой;
+  - сохраняется `chunk_index`;
+  - при page-aware тексте не теряется номер страницы.
+
+## 5.4 Embeddings
+- Используем существующий embedding сервис (E5) для v1.
+- Ошибка любого чанка:
+  - job -> `failed`
+  - фиксируем `error_code=embedding_failed`.
+
+## 6. Retrieval + генерация
+
+## 6.1 Retrieval pipeline
+1. embed query
+2. dense search в Qdrant `top_k=40` (дефолт)
+3. rerank cross-encoder до `top_n=8`
+4. context builder (ограничение по токенам prompt)
+
+## 6.2 Prompting policy
+- system prompt с правилами:
+  - отвечать только по контексту;
+  - если контекста недостаточно, явно сообщать об этом;
+  - цитировать источники.
+- user message + recent history + retrieved context.
+
+## 6.3 LLM abstraction
+- Интерфейс `LLMProvider`:
+  - `stream_chat(messages, settings) -> iterator[delta/events]`
+- Выбор провайдера через `LLM_PROVIDER`:
+  - `openrouter` (default)
+  - `local`
+- Реализация `OpenRouterProvider` (протокол OpenAI-compatible):
+  - env:
+    - `OPENROUTER_BASE_URL`
+    - `OPENROUTER_API_KEY`
+    - `OPENROUTER_MODEL`
+- Реализация `LocalLLMProvider`:
+  - поддержка локального OpenAI-compatible endpoint (например, Ollama/vLLM gateway);
+  - env:
+    - `LOCAL_LLM_BASE_URL`
+    - `LOCAL_LLM_MODEL`
+    - `LOCAL_LLM_API_KEY` (optional, если gateway требует ключ).
+- Провайдер резолвится фабрикой по `LLM_PROVIDER`, без изменения бизнес-логики чата.
+
+## 7. Frontend требования
+
+- Раздел `Documents`:
+  - upload,
+  - список документов,
+  - запуск индексации,
+  - просмотр статуса job (progress/error).
+- Раздел `Chat`:
+  - список сессий,
+  - streaming answer,
+  - citations под ответом.
+- Ошибки:
+  - явные баннеры для `llm_unavailable`, `retrieval_failed`, `parsing_failed`.
+
+## 8. Конфиг и env
+
+Обязательные переменные:
+- `QDRANT_URL`
+- `COLLECTION_NAME`
+- `DATABASE_URL`
+- `S3_ENDPOINT`
+- `S3_BUCKET`
+- `S3_ACCESS_KEY`
+- `S3_SECRET_KEY`
+- `S3_REGION` (optional)
+- `OPENROUTER_BASE_URL`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_MODEL`
+- `LLM_PROVIDER` (`openrouter|local`)
+- `LOCAL_LLM_BASE_URL` (required when `LLM_PROVIDER=local`)
+- `LOCAL_LLM_MODEL` (required when `LLM_PROVIDER=local`)
+- `LOCAL_LLM_API_KEY` (optional)
+- `CHUNK_SIZE_TOKENS`
+- `CHUNK_OVERLAP_TOKENS`
+- `MAX_UPLOAD_SIZE_MB`
+- `ADMIN_API_KEY`
+- `RATE_LIMIT_ENABLED`
+- `RATE_LIMIT_UPLOAD_RPM`
+- `RATE_LIMIT_INDEXING_RPM`
+- `RATE_LIMIT_CHAT_RPM`
+
+## 9. Тестовая стратегия
+
+## 9.1 Python (unit)
+- parser tests (pdf/docx);
+- chunking boundary tests;
+- provider tests (OpenRouter + Local provider + selector factory);
+- error mapper tests.
+
+## 9.2 Go (integration)
+- upload/index/job lifecycle;
+- chat streaming contract;
+- citations schema validation;
+- readiness endpoints.
+
+## 9.3 Frontend
+- API client tests (stream/failure/retry);
+- components tests (jobs/chat/citations).
+
+## 9.4 E2E сценарий
+- upload PDF -> job done -> ask question -> response with non-empty citations.
+
+## 10. Rollout план (этапы)
+
+- `E1`: DB + S3 + базовые модели документов/джоб.
+- `E2`: Upload API + storage adapter.
+- `E3`: Worker + parsing + chunking.
+- `E4`: Embedding + Qdrant upsert + job completion.
+- `E5`: Chat sessions/messages API + retrieval pipeline + rerank.
+- `E6`: LLM provider + streaming SSE + citations.
+- `E7`: Frontend documents/chat UX.
+- `E8`: Tests hardening + observability + readiness checks.
+
+Каждый этап закрывается только после:
+- code + tests + docs;
+- green test run;
+- commit hash записан в changelog этого файла.
+
+## 10.1 Progress tracker (обновляется после каждого commit)
+
+### Статусы этапов
+- `E1`: DB + S3 + базовые модели документов/джоб — `done`
+- `E2`: Upload API + storage adapter — `done`
+- `E3`: Worker + parsing + chunking — `done`
+- `E4`: Embedding + Qdrant upsert + job completion — `done`
+- `E5`: Chat sessions/messages API + retrieval pipeline + rerank — `done`
+- `E6`: LLM provider + streaming SSE + citations — `done`
+- `E7`: Frontend documents/chat UX — `done`
+- `E8`: Tests hardening + observability + readiness checks — `done`
+
+### Выполненные изменения (changelog)
+| Status | Date | Task | Commit |
+|---|---|---|---|
+| done | 2026-04-02 | Master plan + hybrid provider strategy (`openrouter` + `local`) | `20d9468` |
+| done | 2026-04-02 | README link на master-plan | `ca600f1` |
+| done | 2026-04-02 | LLM config (`LLM_PROVIDER`, `OPENROUTER_*`, `LOCAL_LLM_*`) + `LLMError` | `11d060f` |
+| done | 2026-04-02 | Абстракция провайдера LLM и фабрика `openrouter|local` | `9b5babd` |
+| done | 2026-04-02 | Unit-тесты провайдера LLM | `4c61689` |
+| done | 2026-04-02 | Базовый `ChatService` + chat-схемы API | `30a0684` |
+| done | 2026-04-02 | Первые chat endpoints (`create/send/history`) | `a3a5d5a` |
+| done | 2026-04-02 | README: chat endpoints + LLM env | `3eff399` |
+| done | 2026-04-02 | Progress tracker и commit changelog в master-плане | `1f1e5ea` |
+| done | 2026-04-02 | LLM config + `LLMError` для реализации (`openrouter|local`) | `11d060f` |
+| done | 2026-04-02 | Реализация провайдера LLM и фабрики выбора | `9b5babd` |
+| done | 2026-04-02 | Retrieval-контекст и citations в chat-ответах | `280a810` |
+| done | 2026-04-02 | SSE streaming endpoint для chat (`/messages/stream`) + API-тест | `2101314` |
+| done | 2026-04-02 | Реальный LLM streaming (`stream_chat`) и интеграция в chat endpoint | `446329e` |
+| done | 2026-04-02 | Схемы API документов/джоб и ingestion ошибки | `c2355cf` |
+| done | 2026-04-02 | Parser/chunker primitives (txt/docx/pdf optional) | `5ab6f24` |
+| done | 2026-04-02 | In-memory сервисы документов и ingestion jobs | `d220c8c` |
+| done | 2026-04-02 | Upload/list/index/job endpoints + multipart dependency | `063cdf6` |
+| done | 2026-04-02 | API тесты ingestion endpoints | `818e98e` |
+| done | 2026-04-02 | README + tracker update по ingestion этапам | `2f5ec68` |
+| done | 2026-04-02 | Unit-тесты parser/chunker | `8e777f6` |
+| done | 2026-04-02 | Go integration-тесты ingestion API | `e52fdbf` |
+| done | 2026-04-02 | Local storage adapter и перевод ingestion на хранение файлов | `e95e95b` |
+| done | 2026-04-02 | Unit-тесты локального storage adapter | `e262bc6` |
+| done | 2026-04-02 | Подключение `pypdf` для PDF parsing | `e139c2a` |
+| done | 2026-04-02 | Health endpoints `/health/live` и `/health/ready` | `c31ef27` |
+| done | 2026-04-02 | Unit-тесты health endpoints | `e4f2601` |
+| done | 2026-04-02 | S3 storage adapter (`boto3`) + factory switch `local|s3` | `f4a5f95` |
+| done | 2026-04-02 | Тесты storage adapter для `s3` и storage factory | `0ca4885` |
+| done | 2026-04-02 | MinIO сервис в compose и S3 env wiring | `2455d8f` |
+| done | 2026-04-02 | metadata чанков в indexing pipeline и Qdrant payload | `64549c8` |
+| done | 2026-04-02 | Тесты metadata validation/forwarding в indexing | `f88fc37` |
+| done | 2026-04-02 | Retry policy и attempt tracking для ingestion jobs | `43eadc1` |
+| done | 2026-04-02 | Unit-тесты retry-поведения ingestion jobs | `4f20889` |
+| done | 2026-04-02 | Hybrid rerank + context budget в chat pipeline + unit-тесты | `e75edcf` |
+| done | 2026-04-02 | README/example.env: env настройки rerank и context budget | `00b1c82` |
+| done | 2026-04-02 | `GET /api/jobs` + filters (`status`, `document_id`) + API tests | `35a8025` |
+| done | 2026-04-02 | README/docs: update endpoints + progress tracker | `bdbd58f` |
+| done | 2026-04-02 | `GET /api/chat/sessions` endpoint + chat API test | `0e3cfb9` |
+| done | 2026-04-03 | Pluggable chat store abstraction + SQLite backend | `4f7cc48` |
+| done | 2026-04-03 | Unit-тесты SQLite chat store | `c2c0972` |
+| done | 2026-04-03 | Pluggable ingestion job store abstraction + SQLite backend | `9ad86e0` |
+| done | 2026-04-03 | Unit-тесты SQLite ingestion job store | `10d4405` |
+| done | 2026-04-03 | Pluggable document store abstraction + SQLite backend | `a1526a6` |
+| done | 2026-04-03 | Unit-тесты SQLite document store | `67d92d1` |
+| done | 2026-04-03 | Lifecycle wiring: `app.state.services` + startup/shutdown close | `05cb5fe` |
+| done | 2026-04-03 | Unit-тест lifecycle и инициализации `app.state.services` | `2ae33af` |
+| done | 2026-04-03 | Миграция persistent store слоя: SQLite -> PostgreSQL (`chat/jobs/documents`) | `312e103` |
+| done | 2026-04-03 | Unit-тесты store-слоя переведены на PostgreSQL backend | `219b541` |
+| done | 2026-04-03 | Alembic + первая Postgres migration (`uuid/timestamptz/jsonb`) и удаление runtime schema creation | `fe35ab9` |
+| done | 2026-04-03 | Docker startup: auto `alembic upgrade head` + README runbook по миграциям | `e28b260` |
+| done | 2026-04-03 | Очередь ingestion jobs: `claim_next_queued` + worker-friendly processing flow в сервисе | `a5ba62d` |
+| done | 2026-04-03 | Отдельный `worker` сервис в docker-compose для фоновой обработки ingestion | `f9a7278` |
+| done | 2026-04-03 | Идемпотентный `start_indexing` + retry backoff в ingestion сервисе | `c0efaf2` |
+| done | 2026-04-03 | Unit-тесты ingestion: idempotency и backoff behavior | `31f84fe` |
+| done | 2026-04-03 | Token-based chunking в ingestion pipeline (`CHUNK_SIZE_TOKENS`, `CHUNK_OVERLAP_TOKENS`) | `c8df17f` |
+| done | 2026-04-03 | Unit-тесты chunker обновлены под token slicing + overlap validation | `655a9eb` |
+| done | 2026-04-03 | Parser hardening: whitespace normalization + DOCX sections/tables extraction | `0977521` |
+| done | 2026-04-03 | Unit-тесты parser/ingestion metadata (`token_count`) | `0ad8a1a` |
+| done | 2026-04-03 | Reindex safety: удаление старых chunk points в Qdrant перед новой индексацией | `f6930d9` |
+| done | 2026-04-03 | Unit-тесты cleanup шага (api_service + ingestion) | `4d43af3` |
+| done | 2026-04-03 | Metadata enrichment: `chunk_id` + `source_uri` в ingestion payload | `f466eed` |
+| done | 2026-04-03 | Unit-тест на `chunk_id/source_uri` в payload | `e812eb8` |
+| done | 2026-04-03 | API: `GET /api/documents/{id}/index-stats` + qdrant count by `document_id` | `fbec894` |
+| done | 2026-04-03 | Unit/API тесты для index-stats и count chunks | `1096b7f` |
+| done | 2026-04-03 | Admin cleanup endpoint для orphan chunks (`dry_run|delete`) | `accd99a` |
+| done | 2026-04-03 | Unit/API тесты orphan cleanup workflow | `15e5b8c` |
+| done | 2026-04-03 | Защита admin cleanup endpoint через `X-Admin-API-Key` | `e7da0fb` |
+| done | 2026-04-03 | Unit/API тесты проверки admin API key для cleanup endpoint | `c05342f` |
+| done | 2026-04-03 | Ранняя валидация форматов документов при upload (`txt/docx/pdf`) | `dbd1ff1` |
+| done | 2026-04-03 | API-тест `invalid_file_type` для unsupported upload | `5bc51e6` |
+| done | 2026-04-03 | MIME-sniffing на upload с проверкой declared type vs content signature | `af959c0` |
+| done | 2026-04-03 | Python+Go тесты на spoofed upload (подмена PDF/unsupported) | `32d3e6d` |
+| done | 2026-04-03 | Лимит размера upload (`MAX_UPLOAD_SIZE_MB`) + ошибка `file_too_large` (413) | `7828492` |
+| done | 2026-04-03 | Python+Go тесты на превышение лимита upload | `1ff1efd` |
+| done | 2026-04-03 | In-memory rate limiting middleware для `upload/index/chat` | `329a440` |
+| done | 2026-04-03 | Unit-тесты middleware rate limiting (`429`, disabled mode) | `34d2eb5` |
+| done | 2026-04-03 | Docs: env и поведение rate limiting (`rate_limited`) | `e8057d5` |
+| done | 2026-04-03 | Chat filters в request (`document_names/tags`) + интеграция в retrieval | `2ee0fea` |
+| done | 2026-04-03 | Unit/API тесты chat filters | `1aab60f` |
+| done | 2026-04-03 | Frontend API client: документы/jobs/chat + SSE stream parsing | `8e2acc4` |
+| done | 2026-04-03 | Frontend UX: вкладки Search/Documents/Chat + pages для jobs и chat sessions/messages | `26dea11` |
+| done | 2026-04-03 | Frontend styling workspace + test typing fix | `4b040c6` |
+| done | 2026-04-04 | Readiness: проверка `llm` конфигурации (`openrouter/local`) в `/health/ready` | `0187015` |
+| done | 2026-04-04 | Unit-тесты `HealthService` для LLM readiness сценариев | `8fd7925` |
+| done | 2026-04-04 | Docs: README + tracker update для LLM readiness checks | `8250191` |
+| done | 2026-04-04 | Active readiness probe для LLM endpoint (`/models`) + env toggles | `2b47c62` |
+| done | 2026-04-04 | Unit-тесты активного LLM probe (`ok/fail`) | `4ef8948` |
+| done | 2026-04-04 | Go integration-тест контракта `/health/ready` (`status/checks/meta`) | `021ab96` |
+| done | 2026-04-04 | Go integration: стабилизация content-type тестов без зависимости от векторизации | `e5a34c0` |
+| done | 2026-04-04 | Unified CI workflow (Python + frontend + Go integration) | `e6556b4` |
+| done | 2026-04-04 | Docs: unified CI workflow + backlog update в master-plan | `a8459fd` |
+| done | 2026-04-04 | Operations runbook (restart/triage/retry/orphan cleanup/smoke tests) | `4a8cb76` |
+| done | 2026-04-04 | Stable e2e service-flow test: `upload -> index -> chat + non-empty citations` | `06d8ca6` |
+| done | 2026-04-04 | Frontend component tests for documents/jobs/chat/citations | `a140fbf` |
+| done | 2026-04-04 | Frontend user-facing error banners for `llm_unavailable/retrieval_failed/parsing_failed` | `a140fbf` |
+
+Подтверждение `E5 done`:
+- `uv run python -m unittest tests.test_chat_service tests.test_chat_api -v`
+
+Подтверждение `E7 done`:
+- `cd frontend && npm run build`
+- `cd frontend && npm test`
+
+Прогресс `E8` (readiness checks):
+- `uv run python -m unittest tests.test_health_service tests.test_health_api -v`
+
+Прогресс `E8` (CI automation):
+- `.github/workflows/ci.yml` запускает Python/Frontend/Go тестовые джобы.
+
+Подтверждение `E8 done`:
+- `.github/workflows/ci.yml`
+- `uv run python -m unittest tests.test_health_service tests.test_health_api -v`
+- `go test ./tests -v` (при поднятом backend)
+
+## 10.2 Остаточный backlog до v1 done
+
+Открытых пунктов нет.
+
+### Правило ведения трекера
+- После каждого нового коммита:
+  - обновить статус этапа (`todo/in_progress/done`);
+  - добавить строку в таблицу changelog;
+  - при переходе этапа в `done` указать ключевые тесты, которыми он подтверждён.
+
+## 11. Commit policy (обязательная)
+
+### Базовое правило
+**1 маленькое логическое изменение = 1 commit**.
+
+### Формат сообщений
+- `feat(rag): ...`
+- `fix(rag): ...`
+- `refactor(rag): ...`
+- `test(rag): ...`
+- `docs(rag): ...`
+
+### Минимальные commit-единицы
+- отдельный commit на:
+  - API schema change;
+  - service logic change;
+  - data model/migration;
+  - test addition/update;
+  - docs update.
+
+### Запреты
+- не смешивать в одном commit:
+  - бизнес-логику + массовый рефактор стиля;
+  - API контракт + не связанные UI-правки;
+  - тесты нескольких независимых подсистем.
+
+## 12. Definition of Done (v1)
+
+v1 считается завершенной, когда:
+- upload/index/chat работает end-to-end;
+- streaming/citations стабильны;
+- backend и frontend тесты проходят;
+- операции документированы в README и этом плане;
+- есть runbook базовой эксплуатации (restart, retry jobs, health checks).

@@ -1,0 +1,18 @@
+[
+  {
+    "case_id": "zra-definition-001",
+    "query": "Что такое запорно-регулирующая арматура?",
+    "expected_documents": ["zra_overview.pdf"],
+    "expected_pages": [1],
+    "expected_facts": ["запорно-регулирующая арматура"],
+    "answer_type": "definition"
+  },
+  {
+    "case_id": "sdt-gost-001",
+    "query": "Какой ГОСТ относится к отводам трубопроводов?",
+    "expected_documents": ["gost_otvody.pdf"],
+    "expected_pages": [2],
+    "expected_facts": ["ГОСТ 17375"],
+    "answer_type": "standard"
+  }
+]

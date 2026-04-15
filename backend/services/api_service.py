@@ -1,0 +1,192 @@
+import structlog
+
+from backend.core.config import Config
+from backend.core.exceptions import StorageError, VectorizationError
+from backend.infrastructure.ml.vectorizer import TextVectorizer
+from backend.infrastructure.qdrant.client import QdrantService
+from backend.services.query_normalization import normalize_query
+
+logger = structlog.get_logger("api_service")
+
+class ApiService:
+    def __init__(self, qdrant_service=None, vectorizer=None):
+        self.qdrant_service = qdrant_service or QdrantService()
+        self._vectorizer = vectorizer  # None = lazy init on first use
+
+    @property
+    def vectorizer(self):
+        if self._vectorizer is None:
+            self._vectorizer = TextVectorizer()
+        return self._vectorizer
+
+    def search_query(self, query: str, top_k: int, keywords: list = None, filters: dict | None = None):
+        """Выполняет поиск по запросу и возвращает результаты."""
+        normalized_query = normalize_query(query)
+        explicit_keywords = _dedupe([kw.lower() for kw in (keywords or [])])
+        lexical_terms = _dedupe([*explicit_keywords, *normalized_query["expanded_terms"]])
+        logger.info(
+            "search_query_started",
+            query_length=len(query),
+            top_k=top_k,
+            keywords_count=len(lexical_terms),
+        )
+
+        try:
+            # Use the clean normalized query for dense embedding — not the synonym-expanded
+            # version, which would blur the vector representation.
+            query_vector = self.vectorizer.vectorize_text(normalized_query["normalized_query"])
+        except VectorizationError:
+            raise
+        except Exception as error:
+            raise VectorizationError(details={"reason": str(error)}) from error
+
+        try:
+            search_results = self.qdrant_service.search(
+                query_vector,
+                max(top_k, Config.FUSED_RETRIEVE_TOP_N),
+                explicit_keywords,
+                filters=filters,
+                lexical_terms=lexical_terms,
+            )
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(details={"reason": str(error)}) from error
+
+        logger.info("search_query_finished", results_count=len(search_results))
+
+        return {
+            "results": search_results,
+            "total": len(search_results),
+            "debug": {
+                "normalized_query": normalized_query["normalized_query"],
+                "expanded_terms": normalized_query["expanded_terms"],
+                "exact_identifiers": normalized_query["exact_identifiers"],
+            },
+        }
+
+    def index_documents(self, document_name: str, documents: list):
+        """Индексирует документы в Qdrant."""
+        logger.info(
+            "index_documents_started",
+            document_name=document_name,
+            documents_count=len(documents),
+        )
+
+        contents = [doc.get("content") or "" for doc in documents]
+        try:
+            content_vectors = self.vectorizer.vectorize_batch(contents)
+        except VectorizationError:
+            raise
+        except Exception as error:
+            raise VectorizationError(
+                message="Vectorization failed while indexing",
+                details={"reason": str(error)},
+            ) from error
+
+        for index, (document, content_vector) in enumerate(zip(documents, content_vectors)):
+            content = document.get("content")
+            keywords = [kw.lower() for kw in document.get("keywords", [])]
+            dataframe = document.get("dataframe", None)
+            metadata = document.get("metadata", None)
+
+            try:
+                self.qdrant_service.index_document(
+                    document_name=document_name,
+                    content_vector=content_vector,
+                    content=content,
+                    keywords=keywords,
+                    dataframe=dataframe,
+                    metadata=metadata,
+                )
+            except StorageError:
+                raise
+            except Exception as error:
+                raise StorageError(
+                    message="Storage failed while indexing",
+                    details={"index": index, "reason": str(error)},
+                ) from error
+
+        logger.info("index_documents_finished", document_name=document_name, documents_count=len(documents))
+        return {"status": "success", "message": f"{len(documents)} documents indexed."}
+
+    def delete_document_chunks(self, document_id: str):
+        logger.info("delete_document_chunks_started", document_id=document_id)
+        try:
+            self.qdrant_service.delete_document_chunks(document_id)
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while deleting document chunks",
+                details={"document_id": document_id, "reason": str(error)},
+            ) from error
+        logger.info("delete_document_chunks_finished", document_id=document_id)
+
+    def count_document_chunks(self, document_id: str) -> int:
+        logger.info("count_document_chunks_started", document_id=document_id)
+        try:
+            count = self.qdrant_service.count_document_chunks(document_id)
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while counting document chunks",
+                details={"document_id": document_id, "reason": str(error)},
+            ) from error
+        logger.info("count_document_chunks_finished", document_id=document_id, chunks_count=count)
+        return count
+
+    def list_indexed_document_ids(self) -> list[str]:
+        logger.info("list_indexed_document_ids_started")
+        try:
+            ids = self.qdrant_service.list_indexed_document_ids()
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while listing indexed document ids",
+                details={"reason": str(error)},
+            ) from error
+        logger.info("list_indexed_document_ids_finished", documents_count=len(ids))
+        return ids
+
+    def get_document_index_summary(self, document_id: str) -> dict:
+        logger.info("get_document_index_summary_started", document_id=document_id)
+        try:
+            summary = self.qdrant_service.get_document_index_summary(document_id)
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while getting document index summary",
+                details={"document_id": document_id, "reason": str(error)},
+            ) from error
+        logger.info("get_document_index_summary_finished", document_id=document_id, chunks_count=summary.get("chunks_count"))
+        return summary
+
+    def get_document_chunks(self, document_id: str) -> list[dict]:
+        logger.info("get_document_chunks_started", document_id=document_id)
+        try:
+            chunks = self.qdrant_service.get_document_chunks(document_id)
+        except StorageError:
+            raise
+        except Exception as error:
+            raise StorageError(
+                message="Storage failed while reading document chunks",
+                details={"document_id": document_id, "reason": str(error)},
+            ) from error
+        logger.info("get_document_chunks_finished", document_id=document_id, chunks_count=len(chunks))
+        return chunks
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen = set()
+    items: list[str] = []
+    for value in values:
+        normalized = str(value).strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        items.append(normalized)
+    return items
