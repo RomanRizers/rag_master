@@ -193,6 +193,7 @@ export function ChatPage() {
   const [confirmClear, setConfirmClear] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const paramsPopoverRef = useRef<HTMLDivElement>(null);
 
   const sessionsQuery = useQuery({
     queryKey: ["chat-sessions"],
@@ -305,6 +306,18 @@ export function ChatPage() {
       setActiveSessionId(sessions[0].session_id);
     }
   }, [activeSessionId, sessionsQuery.data?.sessions]);
+
+  // Close params popover on outside click
+  useEffect(() => {
+    if (!composerOpen) return;
+    function onPointerDown(e: PointerEvent) {
+      if (paramsPopoverRef.current && !paramsPopoverRef.current.contains(e.target as Node)) {
+        setComposerOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [composerOpen]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -471,6 +484,62 @@ export function ChatPage() {
                     ? `${selectedKnowledgeBases.length} KB`
                     : t.chatAllKBs}
                 </button>
+                <div className="params-popover-wrap" ref={paramsPopoverRef}>
+                  <button
+                    type="button"
+                    className={`kb-scope-chip ${composerOpen ? "kb-scope-chip--active" : ""}`}
+                    onClick={() => setComposerOpen((v) => !v)}
+                    title={t.chatParams}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle cx="12" cy="12" r="3" fill="currentColor" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" strokeWidth="2" />
+                    </svg>
+                    {t.chatParams}
+                  </button>
+                  {composerOpen && (
+                    <div className="composer-advanced--popover">
+                      <label>
+                        <span>top_k</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={topK}
+                          onChange={(e) => setTopK(Number(e.target.value) || 5)}
+                        />
+                      </label>
+                      <label>
+                        <span>document_name</span>
+                        <input
+                          type="text"
+                          value={docNamesText}
+                          placeholder="doc1.pdf, doc2.docx"
+                          onChange={(e) => setDocNamesText(e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        <span>tags</span>
+                        <input
+                          type="text"
+                          value={tagsText}
+                          placeholder="finance, hr"
+                          onChange={(e) => setTagsText(e.target.value)}
+                        />
+                      </label>
+                      <div className="params-divider" />
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => setStreaming((v) => !v)}>
+                        <input
+                          type="checkbox"
+                          checked={streaming}
+                          onChange={(e) => setStreaming(e.target.checked)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Streaming SSE</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className="chat-thread-actions">
@@ -650,6 +719,20 @@ export function ChatPage() {
                     }
                   }}
                 />
+                <button
+                  className="send-icon-btn"
+                  type="submit"
+                  disabled={sendMutation.isPending || !activeSessionId}
+                  aria-label={t.chatSend}
+                >
+                  {sendMutation.isPending ? (
+                    <span className="chat-spinner" aria-hidden="true" />
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
                 {message.length > 60 && (
                   <span className={`char-counter ${message.length > 1000 ? "char-counter--warn" : ""}`}>
                     {message.length}
@@ -657,111 +740,6 @@ export function ChatPage() {
                 )}
               </div>
 
-              <div className="chat-composer-toolbar">
-                <div className="chat-composer-toolbar-left">
-                  <button
-                    type="button"
-                    className={`composer-toggle-btn ${composerOpen ? "open" : ""}`}
-                    onClick={() => setComposerOpen((v) => !v)}
-                    aria-expanded={composerOpen}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <circle cx="12" cy="12" r="3" fill="currentColor" />
-                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" strokeWidth="2" />
-                    </svg>
-                    {t.chatParams}
-                    <svg
-                      className="composer-toggle-chevron"
-                      width="11"
-                      height="11"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`kb-pick-btn ${selectedKnowledgeBases.length > 0 ? "kb-pick-btn--active" : ""}`}
-                    onClick={() => setKbModalOpen(true)}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <ellipse cx="12" cy="6" rx="8" ry="3" stroke="currentColor" strokeWidth="2" />
-                      <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6" stroke="currentColor" strokeWidth="2" />
-                      <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" stroke="currentColor" strokeWidth="2" />
-                    </svg>
-                    {selectedKnowledgeBases.length > 0
-                      ? `${selectedKnowledgeBases.length} база`
-                      : t.chatKBs}
-                  </button>
-                </div>
-
-                <div className="chat-composer-toolbar-right">
-                  <span className="composer-hint muted">Ctrl+Enter</span>
-                  <button
-                    className="send-btn primary-action"
-                    type="submit"
-                    disabled={sendMutation.isPending || !activeSessionId}
-                  >
-                    {sendMutation.isPending ? (
-                      <span className="send-btn-inner">
-                        <span className="chat-spinner" aria-hidden="true" />
-                        {t.chatSending}
-                      </span>
-                    ) : (
-                      <span className="send-btn-inner">
-                        {t.chatSend}
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {composerOpen && (
-                <div className="composer-advanced">
-                  <label>
-                    <span>top_k</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={topK}
-                      onChange={(e) => setTopK(Number(e.target.value) || 5)}
-                    />
-                  </label>
-                  <label>
-                    <span>document_name</span>
-                    <input
-                      type="text"
-                      value={docNamesText}
-                      placeholder="doc1.pdf, doc2.docx"
-                      onChange={(e) => setDocNamesText(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    <span>tags</span>
-                    <input
-                      type="text"
-                      value={tagsText}
-                      placeholder="finance, hr"
-                      onChange={(e) => setTagsText(e.target.value)}
-                    />
-                  </label>
-                  <label className="toggle-line">
-                    <input
-                      type="checkbox"
-                      checked={streaming}
-                      onChange={(e) => setStreaming(e.target.checked)}
-                    />
-                    <span>Streaming SSE</span>
-                  </label>
-                </div>
-              )}
             </div>
           </form>
         </section>
