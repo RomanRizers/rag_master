@@ -126,7 +126,7 @@ export function SearchPage({ embedded = false, language = "ru" }: SearchPageProp
   const knowledgeBases = knowledgeBasesQuery.data?.knowledge_bases ?? [];
 
   const content = (
-    <div className="page-section">
+    <div className="search-page-layout">
       <SearchToolbar
         query={query}
         onQueryChange={setQuery}
@@ -134,106 +134,80 @@ export function SearchPage({ embedded = false, language = "ru" }: SearchPageProp
         onTopKChange={setTopK}
         onSubmit={submitSearch}
         loading={mutation.isPending}
-        text={text}
+        knowledgeBases={knowledgeBases}
+        selectedKnowledgeBases={selectedKnowledgeBases}
+        onToggleKnowledgeBase={toggleKnowledgeBase}
+        onClearKnowledgeBases={() => setSelectedKnowledgeBases([])}
       />
 
-      <section className="toolbar-card">
-        <div className="toolbar-inline">
-          <div className="toolbar-copy compact">
-            <span className="section-kicker">{text.knowledgeBase}</span>
-            <h2>Scope</h2>
-          </div>
-          {selectedKnowledgeBases.length > 0 && (
-            <button type="button" className="text-button" onClick={() => setSelectedKnowledgeBases([])}>
-              {text.clearFilters}
-            </button>
-          )}
-        </div>
-        <div className="keyword-chips">
-          {knowledgeBases.map((item) => (
-            <button
-              key={item.name}
-              type="button"
-              className={`keyword-chip ${selectedKnowledgeBases.includes(item.name) ? "active" : ""}`}
-              onClick={() => toggleKnowledgeBase(item.name)}
-            >
-              {item.name} ({item.document_count})
-            </button>
-          ))}
-        </div>
-      </section>
+      <div className="search-results-area">
+        <SearchStatus
+          loading={mutation.isPending}
+          isError={mutation.isError}
+          error={mutation.error instanceof ApiRequestError ? mutation.error : new Error(text.unexpectedError)}
+          isSuccess={mutation.isSuccess}
+          total={mutation.data?.total ?? 0}
+          visible={visibleResults.length}
+          text={text}
+          errorCopy={appErrorCopy[language]}
+        />
 
-      <SearchStatus
-        loading={mutation.isPending}
-        isError={mutation.isError}
-        error={mutation.error instanceof ApiRequestError ? mutation.error : new Error(text.unexpectedError)}
-        isSuccess={mutation.isSuccess}
-        total={mutation.data?.total ?? 0}
-        visible={visibleResults.length}
-        text={text}
-        errorCopy={appErrorCopy[language]}
-      />
-
-      {!mutation.isSuccess && !mutation.isPending && !mutation.isError && (
-        <div className="search-empty-state">
-          <div className="search-empty-icon" aria-hidden="true">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.2" />
-              <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-              <path d="M8 11h6M11 8v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
+        {!mutation.isSuccess && !mutation.isPending && !mutation.isError && (
+          <div className="search-empty-state">
+            <div className="search-empty-icon" aria-hidden="true">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.2" />
+                <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                <path d="M8 11h6M11 8v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+            <div className="search-empty-text">
+              <p style={{ fontWeight: 700, margin: 0 }}>Введите запрос</p>
+              <p className="muted" style={{ margin: 0, fontSize: "0.88rem" }}>Семантический поиск по фрагментам во всех базах знаний</p>
+            </div>
+            <div className="search-empty-suggestions">
+              {["технические требования", "монтаж трубопроводов", "ГОСТ стандарт"].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className="chat-suggestion-chip"
+                  onClick={() => setQuery(s)}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="search-empty-text">
-            <p style={{ fontWeight: 700, margin: 0 }}>Введите запрос</p>
-            <p className="muted" style={{ margin: 0 }}>Поиск по фрагментам документов во всех базах знаний</p>
-          </div>
-          <div className="search-empty-suggestions">
-            {["технические требования", "монтаж трубопроводов", "ГОСТ стандарт"].map((s) => (
-              <button
-                key={s}
-                type="button"
-                className="chat-suggestion-chip"
-                onClick={() => { setQuery(s); }}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+        )}
 
-      {mutation.isSuccess && mutation.data.results.length > 0 && (
-        <>
-          <ResultsControls
-            sortMode={sortMode}
-            onSortModeChange={setSortMode}
-            allKeywords={allKeywords}
-            selectedKeywords={selectedKeywords}
-            onToggleKeyword={toggleKeyword}
-            onClearKeywords={() => setSelectedKeywords([])}
-            text={text}
-          />
-
-          <section className="results-grid">
-            {visibleResults.map((result, idx) => (
-              <div
-                key={result.id}
-                className="result-card-wrapper"
-                style={{ animationDelay: `${idx * 45}ms` }}
-              >
-                <ResultCard
-                  result={result}
-                  query={query}
-                  text={text}
-                  copiedState={copied[result.id] ?? { content: false, keywords: false }}
-                  onCopyContent={() => copyContent(result.id, result.payload.content || "")}
-                  onCopyKeywords={() => copyKeywords(result.id, result.payload.keywords ?? [])}
-                />
-              </div>
-            ))}
-          </section>
-        </>
-      )}
+        {mutation.isSuccess && mutation.data.results.length > 0 && (
+          <>
+            <ResultsControls
+              sortMode={sortMode}
+              onSortModeChange={setSortMode}
+              allKeywords={allKeywords}
+              selectedKeywords={selectedKeywords}
+              onToggleKeyword={toggleKeyword}
+              onClearKeywords={() => setSelectedKeywords([])}
+              text={text}
+            />
+            <section className="results-grid">
+              {visibleResults.map((result, idx) => (
+                <div key={result.id} className="result-card-wrapper" style={{ animationDelay: `${idx * 45}ms` }}>
+                  <ResultCard
+                    result={result}
+                    query={query}
+                    text={text}
+                    copiedState={copied[result.id] ?? { content: false, keywords: false }}
+                    onCopyContent={() => copyContent(result.id, result.payload.content || "")}
+                    onCopyKeywords={() => copyKeywords(result.id, result.payload.keywords ?? [])}
+                  />
+                </div>
+              ))}
+            </section>
+          </>
+        )}
+      </div>
     </div>
   );
 

@@ -1,13 +1,6 @@
-import type { FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
-type SearchToolbarCopy = {
-  title: string;
-  subtitle: string;
-  queryPlaceholder: string;
-  topKLabel: string;
-  topKHint: string;
-  searchButton: string;
-};
+type KnowledgeBase = { name: string; document_count: number };
 
 type SearchToolbarProps = {
   query: string;
@@ -16,7 +9,10 @@ type SearchToolbarProps = {
   onTopKChange: (value: number) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   loading: boolean;
-  text: SearchToolbarCopy;
+  knowledgeBases: KnowledgeBase[];
+  selectedKnowledgeBases: string[];
+  onToggleKnowledgeBase: (name: string) => void;
+  onClearKnowledgeBases: () => void;
 };
 
 export function SearchToolbar({
@@ -26,91 +22,125 @@ export function SearchToolbar({
   onTopKChange,
   onSubmit,
   loading,
-  text
+  knowledgeBases,
+  selectedKnowledgeBases,
+  onToggleKnowledgeBase,
+  onClearKnowledgeBases,
 }: SearchToolbarProps) {
+  const [kbOpen, setKbOpen] = useState(false);
+  const kbRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!kbOpen) return;
+    function onPointerDown(e: PointerEvent) {
+      if (kbRef.current && !kbRef.current.contains(e.target as Node)) {
+        setKbOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [kbOpen]);
+
   return (
-    <section className="toolbar-card search-toolbar">
-      <div className="toolbar-topline">
-        <div className="toolbar-copy">
-          <span className="section-kicker">Search</span>
-          <h2>{text.title}</h2>
-          <p>{text.subtitle}</p>
-        </div>
-      </div>
+    <form className="search-composer" onSubmit={onSubmit}>
+      <div className="search-composer-inner">
+        <svg className="search-input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+          <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
 
-      <form className="search-form" onSubmit={onSubmit}>
-        <div className="search-input-wrap">
-          <svg
-            className="search-input-icon"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-            <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          <input
-            className="search-input"
-            type="text"
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder={text.queryPlaceholder}
-            aria-label={text.queryPlaceholder}
-            autoComplete="off"
-            autoFocus
-          />
-          {loading && <span className="search-spinner" aria-hidden="true" />}
-        </div>
+        <input
+          className="search-input"
+          type="text"
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Введите поисковый запрос…"
+          autoComplete="off"
+          autoFocus
+        />
 
-        <div className="search-form-footer">
-          <label className="search-topk-label">
-            <span className="meta-label">{text.topKLabel}</span>
-            <div className="search-topk-stepper">
-              <button
-                type="button"
-                className="topk-step-btn"
-                onClick={() => onTopKChange(Math.max(1, topK - 1))}
-                aria-label="Уменьшить"
-              >−</button>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={topK}
-                onChange={(e) => onTopKChange(Math.max(1, Math.min(50, Number(e.target.value || 1))))}
-                aria-label={text.topKHint}
-                title={text.topKHint}
-                className="topk-input"
-              />
-              <button
-                type="button"
-                className="topk-step-btn"
-                onClick={() => onTopKChange(Math.min(50, topK + 1))}
-                aria-label="Увеличить"
-              >+</button>
-            </div>
-          </label>
+        <div className="search-composer-controls">
+          {/* KB selector */}
+          <div className="search-kb-wrap" ref={kbRef}>
+            <button
+              type="button"
+              className={`search-chip-btn ${selectedKnowledgeBases.length > 0 ? "active" : ""}`}
+              onClick={() => setKbOpen((v) => !v)}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <ellipse cx="12" cy="6" rx="8" ry="3" stroke="currentColor" strokeWidth="2" />
+                <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6" stroke="currentColor" strokeWidth="2" />
+                <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" stroke="currentColor" strokeWidth="2" />
+              </svg>
+              {selectedKnowledgeBases.length > 0 ? `${selectedKnowledgeBases.length} KB` : "Все базы"}
+            </button>
 
-          <button type="submit" className="primary-action search-submit-btn" disabled={loading}>
+            {kbOpen && (
+              <div className="search-kb-popover">
+                <div className="search-kb-popover-head">
+                  <span>База знаний</span>
+                  {selectedKnowledgeBases.length > 0 && (
+                    <button type="button" className="search-kb-clear" onClick={onClearKnowledgeBases}>
+                      Сбросить
+                    </button>
+                  )}
+                </div>
+                <div className="search-kb-list">
+                  {knowledgeBases.length === 0 && (
+                    <p className="search-kb-empty">Нет баз знаний</p>
+                  )}
+                  {knowledgeBases.map((kb) => {
+                    const active = selectedKnowledgeBases.includes(kb.name);
+                    return (
+                      <button
+                        key={kb.name}
+                        type="button"
+                        className={`search-kb-item ${active ? "active" : ""}`}
+                        onClick={() => onToggleKnowledgeBase(kb.name)}
+                      >
+                        <span className="search-kb-check">
+                          {active && (
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                              <path d="M20 6 9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="search-kb-name">{kb.name}</span>
+                        <span className="search-kb-count">{kb.document_count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* top_k */}
+          <div className="search-topk-wrap">
+            <span className="search-topk-label">top</span>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={topK}
+              onChange={(e) => onTopKChange(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+              className="search-topk-input"
+            />
+          </div>
+
+          {/* Submit */}
+          <button type="submit" className="send-icon-btn" disabled={loading} aria-label="Найти">
             {loading ? (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span className="chat-spinner" style={{ width: 13, height: 13 }} aria-hidden="true" />
-                Поиск...
-              </span>
+              <span className="chat-spinner" aria-hidden="true" />
             ) : (
-              <>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2.2" />
-                  <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-                </svg>
-                {text.searchButton}
-              </>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2.2" />
+                <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
             )}
           </button>
         </div>
-      </form>
-    </section>
+      </div>
+    </form>
   );
 }
