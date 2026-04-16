@@ -102,6 +102,16 @@ function makeDatasetBadge(name: string): string {
     .join("");
 }
 
+function getPaginationRange(current: number, total: number): (number | "...")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const range: (number | "...")[] = [1];
+  if (current > 3) range.push("...");
+  for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) range.push(i);
+  if (current < total - 2) range.push("...");
+  range.push(total);
+  return range;
+}
+
 function chunkPreview(value: string): string {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (normalized.length <= 240) {
@@ -135,6 +145,9 @@ export function DocumentsPage() {
   });
   const [chunkSearch, setChunkSearch] = useState("");
   const [selectedChunk, setSelectedChunk] = useState<DocumentChunkItem | null>(null);
+  const [renameModal, setRenameModal] = useState<{ name: string } | null>(null);
+  const [renameInput, setRenameInput] = useState("");
+  const [deleteModal, setDeleteModal] = useState<KnowledgeBaseItem | null>(null);
 
   const documentsQuery = useQuery({
     queryKey: ["documents"],
@@ -185,6 +198,7 @@ export function DocumentsPage() {
     onSuccess: (payload, variables) => {
       queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
+      setRenameModal(null);
       if (activeKnowledgeBase === variables.currentName) {
         navigate(`/dataset/${encodeURIComponent(payload.name)}`);
       }
@@ -196,6 +210,7 @@ export function DocumentsPage() {
     onSuccess: (_, deletedName) => {
       queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
+      setDeleteModal(null);
       if (activeKnowledgeBase === deletedName) {
         navigate("/dataset");
       }
@@ -466,21 +481,22 @@ export function DocumentsPage() {
   }
 
   function handleRenameKnowledgeBase(currentName: string) {
-    const nextName = window.prompt(t.datasetRenamePlaceholder, currentName)?.trim();
-    if (!nextName || nextName === currentName) {
+    setRenameInput(currentName);
+    setRenameModal({ name: currentName });
+  }
+
+  function submitRenameKnowledgeBase() {
+    if (!renameModal) return;
+    const nextName = renameInput.trim();
+    if (!nextName || nextName === renameModal.name) {
+      setRenameModal(null);
       return;
     }
-    renameKnowledgeBaseMutation.mutate({ currentName, nextName });
+    renameKnowledgeBaseMutation.mutate({ currentName: renameModal.name, nextName });
   }
 
   function handleDeleteKnowledgeBase(item: KnowledgeBaseItem) {
-    if (item.document_count > 0) {
-      return;
-    }
-    if (!window.confirm(`${t.datasetDeleteConfirm} "${item.name}"?`)) {
-      return;
-    }
-    deleteKnowledgeBaseMutation.mutate(item.name);
+    setDeleteModal(item);
   }
 
   function renderDatasetGrid() {
@@ -517,46 +533,77 @@ export function DocumentsPage() {
                   </div>
                 </Link>
                 <div className="dataset-card-actions">
-                  <button type="button" className="card-icon-btn" onClick={() => handleRenameKnowledgeBase(item.name)}>
-                    Rename
+                  <button
+                    type="button"
+                    className={`card-icon-btn${renameModal?.name === item.name ? " active" : ""}`}
+                    onClick={() => handleRenameKnowledgeBase(item.name)}
+                  >
+                    {t.datasetRename}
                   </button>
                   <button
                     type="button"
-                    className="card-icon-btn danger"
-                    disabled={item.document_count > 0}
+                    className={`card-icon-btn danger${deleteModal?.name === item.name ? " active" : ""}`}
                     onClick={() => handleDeleteKnowledgeBase(item)}
                   >
-                    Delete
+                    {t.datasetDelete}
                   </button>
                 </div>
               </article>
             ))}
           </div>
           <div className="dataset-pagination">
-            <div className="dataset-page-size">
-              <span>{t.datasetShow}</span>
-              <select value={datasetPageSize} onChange={(event) => setDatasetPageSize(Number(event.target.value))}>
-                <option value={6}>6</option>
-                <option value={8}>8</option>
-                <option value={12}>12</option>
-                <option value={16}>16</option>
-              </select>
-            </div>
             <div className="dataset-page-controls">
-              <button type="button" className="ghost-action" disabled={datasetPage <= 1} onClick={() => setDatasetPage((page) => Math.max(1, page - 1))}>
-                Назад
-              </button>
-              <span>
-                {t.datasetPage} {datasetPage} / {datasetPageCount}
-              </span>
               <button
                 type="button"
-                className="ghost-action"
-                disabled={datasetPage >= datasetPageCount}
-                onClick={() => setDatasetPage((page) => Math.min(datasetPageCount, page + 1))}
+                className="pagination-arrow"
+                disabled={datasetPage <= 1}
+                onClick={() => setDatasetPage((p) => Math.max(1, p - 1))}
+                aria-label="Предыдущая страница"
               >
-                Далее
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
+
+              {getPaginationRange(datasetPage, datasetPageCount).map((item, i) =>
+                item === "..." ? (
+                  <span key={`ellipsis-${i}`} className="pagination-ellipsis">…</span>
+                ) : (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`pagination-page ${datasetPage === item ? "active" : ""}`}
+                    onClick={() => setDatasetPage(item as number)}
+                  >
+                    {item}
+                  </button>
+                )
+              )}
+
+              <button
+                type="button"
+                className="pagination-arrow"
+                disabled={datasetPage >= datasetPageCount}
+                onClick={() => setDatasetPage((p) => Math.min(datasetPageCount, p + 1))}
+                aria-label="Следующая страница"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+
+              <div className="pagination-page-size">
+                <select
+                  value={datasetPageSize}
+                  onChange={(e) => { setDatasetPageSize(Number(e.target.value)); setDatasetPage(1); }}
+                  aria-label={t.datasetShow}
+                >
+                  <option value={6}>6 / стр.</option>
+                  <option value={8}>8 / стр.</option>
+                  <option value={12}>12 / стр.</option>
+                  <option value={16}>16 / стр.</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -899,6 +946,77 @@ export function DocumentsPage() {
       {pageError ? <ErrorBanner error={pageError} copy={appErrorCopy.ru} className="status status-error" /> : null}
 
       {activeKnowledgeBase ? (activeDocumentId ? renderDocumentDetail() : renderDatasetDetail()) : renderDatasetGrid()}
+
+      {renameModal ? (
+        <div className="overlay-backdrop" onClick={() => setRenameModal(null)}>
+          <section className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="overlay-head">
+              <div>
+                <span className="section-kicker">Dataset</span>
+                <h3>{t.datasetRename}</h3>
+              </div>
+              <button type="button" className="overlay-close" onClick={() => setRenameModal(null)}>×</button>
+            </div>
+            <form className="overlay-form" onSubmit={(e) => { e.preventDefault(); submitRenameKnowledgeBase(); }}>
+              <label>
+                <span>{t.datasetNameLabel}</span>
+                <input
+                  type="text"
+                  value={renameInput}
+                  placeholder={t.datasetRenamePlaceholder}
+                  autoFocus
+                  onChange={(e) => setRenameInput(e.target.value)}
+                />
+              </label>
+              <div className="overlay-actions">
+                <button type="button" className="ghost-action" onClick={() => setRenameModal(null)}>
+                  {t.datasetCancel}
+                </button>
+                <button type="submit" className="primary-action" disabled={renameKnowledgeBaseMutation.isPending || !renameInput.trim()}>
+                  {renameKnowledgeBaseMutation.isPending ? "Сохранение..." : t.datasetSaveSettings}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {deleteModal ? (
+        <div className="overlay-backdrop" onClick={() => setDeleteModal(null)}>
+          <section className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="overlay-head">
+              <div>
+                <span className="section-kicker">Dataset</span>
+                <h3>{t.datasetDeleteConfirm}</h3>
+              </div>
+              <button type="button" className="overlay-close" onClick={() => setDeleteModal(null)}>×</button>
+            </div>
+            <div className="overlay-form">
+              <p style={{ margin: 0 }}>
+                База знаний <strong>«{deleteModal.name}»</strong> будет удалена безвозвратно.
+                {deleteModal.document_count > 0 && (
+                  <span className="status status-error" style={{ display: "block", marginTop: 10 }}>
+                    ⚠ Содержит {deleteModal.document_count} {t.datasetFiles} — они также будут удалены.
+                  </span>
+                )}
+              </p>
+              <div className="overlay-actions">
+                <button type="button" className="ghost-action" onClick={() => setDeleteModal(null)}>
+                  {t.datasetCancel}
+                </button>
+                <button
+                  type="button"
+                  className="danger-action"
+                  disabled={deleteKnowledgeBaseMutation.isPending}
+                  onClick={() => deleteKnowledgeBaseMutation.mutate(deleteModal.name)}
+                >
+                  {deleteKnowledgeBaseMutation.isPending ? "Удаление..." : t.datasetDelete}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {isCreateKnowledgeBaseOpen ? (
         <div className="overlay-backdrop" onClick={() => setIsCreateKnowledgeBaseOpen(false)}>
