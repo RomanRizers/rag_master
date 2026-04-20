@@ -34,7 +34,10 @@ class ApiService:
         try:
             # Use the clean normalized query for dense embedding — not the synonym-expanded
             # version, which would blur the vector representation.
-            query_vector = self.vectorizer.vectorize_text(normalized_query["normalized_query"])
+            query_vector = self.vectorizer.vectorize_text(
+                normalized_query["normalized_query"],
+                prefix=Config.E5_QUERY_PREFIX,
+            )
         except VectorizationError:
             raise
         except Exception as error:
@@ -75,7 +78,7 @@ class ApiService:
 
         contents = [doc.get("content") or "" for doc in documents]
         try:
-            content_vectors = self.vectorizer.vectorize_batch(contents)
+            content_vectors = self.vectorizer.vectorize_batch(contents, prefix=Config.E5_PASSAGE_PREFIX)
         except VectorizationError:
             raise
         except Exception as error:

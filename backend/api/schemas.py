@@ -216,6 +216,20 @@ class DocumentUploadResponse(BaseModel):
     created_at: str
 
 
+class IndexDocumentRequest(BaseModel):
+    delimiters: list[str] | None = None
+
+    @field_validator("delimiters", mode="before")
+    @classmethod
+    def validate_delimiters(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError("'delimiters' must be a list of strings")
+        normalized = [str(d) for d in value if isinstance(d, str) and d]
+        return normalized if normalized else None
+
+
 class DocumentIndexResponse(BaseModel):
     job_id: str
     status: str
