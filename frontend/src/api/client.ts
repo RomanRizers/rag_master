@@ -162,9 +162,14 @@ export async function uploadDocument(
   return (await response.json()) as DocumentUploadResponse;
 }
 
-export async function indexDocument(documentId: string): Promise<DocumentIndexResponse> {
+export async function indexDocument(documentId: string, delimiters?: string[]): Promise<DocumentIndexResponse> {
+  const hasDelimiters = delimiters && delimiters.length > 0;
   const response = await fetch(`/api/documents/${documentId}/index`, {
-    method: "POST"
+    method: "POST",
+    ...(hasDelimiters && {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delimiters }),
+    }),
   });
   if (!response.ok) {
     return parseError(response);
