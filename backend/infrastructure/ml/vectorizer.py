@@ -24,17 +24,16 @@ class TextVectorizer:
         self._lock = threading.Lock()
         logger.info("vectorizer_model_loaded", model_name=self.model_name)
 
-    def vectorize_text(self, text: str) -> np.ndarray:
-        """Векторизует один текст. Делегирует в vectorize_batch."""
+    def vectorize_text(self, text: str, prefix: str = "") -> np.ndarray:
         if not isinstance(text, str) or not text.strip():
             raise VectorizationError(
                 message="Input text must be a non-empty string",
                 code="invalid_vectorization_input",
                 status_code=400,
             )
-        return self.vectorize_batch([text])[0]
+        return self.vectorize_batch([text], prefix=prefix)[0]
 
-    def vectorize_batch(self, texts: list[str]) -> list[np.ndarray]:
+    def vectorize_batch(self, texts: list[str], prefix: str = "") -> list[np.ndarray]:
         """Векторизует список текстов за один forward pass.
 
         Использует Lock для thread-safety: PyTorch не гарантирует
@@ -43,10 +42,11 @@ class TextVectorizer:
         if not texts:
             return []
         try:
-            logger.debug("vectorize_batch_started", model_name=self.model_name, batch_size=len(texts))
+            prefixed = [prefix + t for t in texts] if prefix else texts
+            logger.debug("vectorize_batch_started", model_name=self.model_name, batch_size=len(prefixed))
             with self._lock:
                 inputs = self.tokenizer(
-                    texts,
+                    prefixed,
                     return_tensors="pt",
                     padding=True,
                     truncation=True,
@@ -55,8 +55,9 @@ class TextVectorizer:
                 with torch.no_grad():
                     embeddings = self.model(**inputs).last_hidden_state
 
-            mean_embeddings = embeddings.mean(dim=1)
-            normalized = F.normalize(mean_embeddings, p=2, dim=1)
+            # CLS token pooling (index 0) — required for BGE-M3 and compatible with E5
+            cls_embeddings = embeddings[:, 0, :]
+            normalized = F.normalize(cls_embeddings, p=2, dim=1)
             vectors = [normalized[i].numpy() for i in range(len(texts))]
             logger.debug("vectorize_batch_finished", batch_size=len(texts), vector_size=int(vectors[0].shape[0]))
             return vectors
