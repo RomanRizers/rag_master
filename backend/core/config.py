@@ -4,8 +4,8 @@ import os
 class Config:
     """Класс для хранения конфигурации приложения."""
     QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
-    COLLECTION_NAME = os.getenv("COLLECTION_NAME", "gazprom_dataset_e5")
-    MODEL_NAME = os.getenv("MODEL_NAME", "d0rj/e5-base-en-ru")
+    COLLECTION_NAME = os.getenv("COLLECTION_NAME", "rag_bge_m3")
+    MODEL_NAME = os.getenv("MODEL_NAME", "BAAI/bge-m3")
     TOP_K_DEFAULT = int(os.getenv("TOP_K_DEFAULT", "5"))
     TOP_K_MAX = int(os.getenv("TOP_K_MAX", "50"))
     CHUNK_SIZE_TOKENS = int(os.getenv("CHUNK_SIZE_TOKENS", "600"))
@@ -14,15 +14,20 @@ class Config:
     SPARSE_RETRIEVE_TOP_N = int(os.getenv("SPARSE_RETRIEVE_TOP_N", "40"))
     FUSED_RETRIEVE_TOP_N = int(os.getenv("FUSED_RETRIEVE_TOP_N", "20"))
     RERANK_TOP_N = int(os.getenv("RERANK_TOP_N", "8"))
-    RERANK_SEMANTIC_WEIGHT = float(os.getenv("RERANK_SEMANTIC_WEIGHT", "0.7"))
-    RERANK_LEXICAL_WEIGHT = float(os.getenv("RERANK_LEXICAL_WEIGHT", "0.18"))
+    RERANK_SEMANTIC_WEIGHT = float(os.getenv("RERANK_SEMANTIC_WEIGHT", "0.62"))
+    RERANK_LEXICAL_WEIGHT = float(os.getenv("RERANK_LEXICAL_WEIGHT", "0.15"))
     RERANK_KEYWORD_WEIGHT = float(os.getenv("RERANK_KEYWORD_WEIGHT", "0.08"))
-    RERANK_METADATA_WEIGHT = float(os.getenv("RERANK_METADATA_WEIGHT", "0.04"))
-    CHAT_MAX_CONTEXT_CHARS = int(os.getenv("CHAT_MAX_CONTEXT_CHARS", "6000"))
-    CHAT_MAX_CONTEXT_TOKENS = int(os.getenv("CHAT_MAX_CONTEXT_TOKENS", "1400"))
+    RERANK_METADATA_WEIGHT = float(os.getenv("RERANK_METADATA_WEIGHT", "0.15"))
+    CHAT_MAX_CONTEXT_CHARS = int(os.getenv("CHAT_MAX_CONTEXT_CHARS", "12000"))
+    CHAT_MAX_CONTEXT_TOKENS = int(os.getenv("CHAT_MAX_CONTEXT_TOKENS", "2800"))
     CHAT_HISTORY_MAX_MESSAGES = int(os.getenv("CHAT_HISTORY_MAX_MESSAGES", "8"))
     CHAT_MIN_RESULTS_REQUIRED = int(os.getenv("CHAT_MIN_RESULTS_REQUIRED", "1"))
-    CHAT_MIN_RERANK_SCORE = float(os.getenv("CHAT_MIN_RERANK_SCORE", "0.28"))
+    CHAT_MIN_RERANK_SCORE = float(os.getenv("CHAT_MIN_RERANK_SCORE", "0.20"))
+    LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1400"))
+    # E5 model inference prefixes — set to "query: " / "passage: " when using E5-family models.
+    # Changing E5_PASSAGE_PREFIX requires full re-indexing of all documents.
+    E5_QUERY_PREFIX = os.getenv("E5_QUERY_PREFIX", "")   # leave empty for BGE-M3
+    E5_PASSAGE_PREFIX = os.getenv("E5_PASSAGE_PREFIX", "")  # leave empty for BGE-M3
     CHAT_STORE_BACKEND = os.getenv("CHAT_STORE_BACKEND", "memory").strip().lower()
     JOB_STORE_BACKEND = os.getenv("JOB_STORE_BACKEND", "memory").strip().lower()
 

@@ -1,7 +1,7 @@
 import json
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -20,6 +20,7 @@ from backend.api.schemas import (
     DocumentIndexResponse,
     DocumentChunksResponse,
     DocumentIndexStatsResponse,
+    IndexDocumentRequest,
     KnowledgeBaseListResponse,
     DocumentListResponse,
     DocumentUploadResponse,
@@ -210,8 +211,17 @@ async def upload_document(
 
 
 @api_router.post("/api/documents/{document_id}/index")
-async def index_document(request: Request, document_id: str):
-    job = await run_in_threadpool(get_ingestion_service(request).start_indexing, document_id)
+async def index_document(
+    request: Request,
+    document_id: str,
+    body: IndexDocumentRequest | None = Body(default=None),
+):
+    delimiters = body.delimiters if body else None
+    job = await run_in_threadpool(
+        get_ingestion_service(request).start_indexing,
+        document_id,
+        delimiters=delimiters,
+    )
     response = DocumentIndexResponse.model_validate(job)
     return JSONResponse(content=response.model_dump(), status_code=202)
 

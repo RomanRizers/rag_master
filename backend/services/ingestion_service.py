@@ -30,7 +30,7 @@ class IngestionService:
         self.api_service = api_service or ApiService()
         self.job_store = job_store or create_job_store()
 
-    def start_indexing(self, document_id: str) -> dict:
+    def start_indexing(self, document_id: str, delimiters: list[str] | None = None) -> dict:
         self.document_service.get_document(document_id)
         active_job = self._find_active_job_for_document(document_id)
         if active_job is not None:
@@ -51,6 +51,7 @@ class IngestionService:
             "error_message": None,
             "started_at": None,
             "finished_at": None,
+            "delimiters": list(delimiters) if delimiters else [],
         }
 
         self.job_store.create_job(job)
@@ -176,10 +177,14 @@ class IngestionService:
         document_bytes = self.document_service.read_content(document_id)
         self.api_service.delete_document_chunks(document_id)
 
+        job = self.get_job(job_id)
+        delimiters = job.get("delimiters") or None
+
         blocks = parse_document(
             file_name=document.file_name,
             mime_type=document.mime_type,
             content=document_bytes,
+            delimiters=delimiters,
         )
         self._update_job(job_id, progress=40)
 

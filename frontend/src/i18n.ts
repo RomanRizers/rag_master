@@ -146,6 +146,11 @@ export type Copy = {
   datasetPage404: string;
   datasetTokens: string;
   datasetKwChunk: string;
+  datasetDelimiters: string;
+  datasetDelimitersPlaceholder: string;
+  datasetUploadDocs: string;
+  datasetDropFiles: string;
+  datasetUploadAll: string;
 };
 
 export const copy: Record<Language, Copy> = {
@@ -292,6 +297,11 @@ export const copy: Record<Language, Copy> = {
     datasetPage404: "Страница не найдена",
     datasetTokens: "токенов",
     datasetKwChunk: "кл.сл./чанк",
+    datasetDelimiters: "Разделители (через запятую)",
+    datasetDelimitersPlaceholder: "Например: ---, ===",
+    datasetUploadDocs: "Загрузить документы",
+    datasetDropFiles: "Перетащите файлы сюда или нажмите для выбора",
+    datasetUploadAll: "Загрузить",
   },
 
   en: {
@@ -437,6 +447,11 @@ export const copy: Record<Language, Copy> = {
     datasetPage404: "Page not found",
     datasetTokens: "tokens",
     datasetKwChunk: "kw/chunk",
+    datasetDelimiters: "Delimiters (comma-separated)",
+    datasetDelimitersPlaceholder: "e.g.: ---, ===",
+    datasetUploadDocs: "Upload documents",
+    datasetDropFiles: "Drop files here or click to browse",
+    datasetUploadAll: "Upload",
   }
 };
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -21,6 +21,13 @@ import type { DocumentChunkItem, DocumentItem, JobItem, KnowledgeBaseItem } from
 import { appErrorCopy, resolveAppError } from "../utils/appError";
 import { useLang } from "../LangContext";
 import { ErrorBanner } from "./ErrorBanner";
+
+type UploadFileItem = {
+  id: string;
+  file: File;
+  status: "pending" | "uploading" | "done" | "error";
+  error?: string;
+};
 
 type StatsByDocument = Record<
   string,
@@ -127,15 +134,19 @@ export function DocumentsPage() {
   const params = useParams<{ datasetName?: string; documentId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [file, setFile] = useState<File | null>(null);
   const [isCreateKnowledgeBaseOpen, setIsCreateKnowledgeBaseOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [newKnowledgeBaseName, setNewKnowledgeBaseName] = useState("");
   const [datasetPage, setDatasetPage] = useState(1);
   const [datasetPageSize, setDatasetPageSize] = useState(8);
-  const [sourceName, setSourceName] = useState("");
-  const [tagsText, setTagsText] = useState("");
-  const [knowledgeBase, setKnowledgeBase] = useState("default");
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState<UploadFileItem[]>([]);
+  const [modalSourceName, setModalSourceName] = useState("");
+  const [modalTagsText, setModalTagsText] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  const [uploadModalError, setUploadModalError] = useState<Error | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [statsByDocument, setStatsByDocument] = useState<StatsByDocument>({});
   const [knowledgeBaseSettings, setKnowledgeBaseSettings] = useState<KnowledgeBaseSettingsState>({
     profile_mode: "balanced",
@@ -148,6 +159,7 @@ export function DocumentsPage() {
   const [renameModal, setRenameModal] = useState<{ name: string } | null>(null);
   const [renameInput, setRenameInput] = useState("");
   const [deleteModal, setDeleteModal] = useState<KnowledgeBaseItem | null>(null);
+  const [delimiterInputs, setDelimiterInputs] = useState<Record<string, string>>({});
 
   const documentsQuery = useQuery({
     queryKey: ["documents"],
@@ -165,21 +177,6 @@ export function DocumentsPage() {
     queryKey: ["knowledge-bases"],
     queryFn: listKnowledgeBases,
     refetchInterval: 7000
-  });
-
-  const uploadMutation = useMutation({
-    mutationFn: (payload: { file: File; sourceName: string; tags: string[]; knowledgeBase: string }) =>
-      uploadDocument(payload.file, payload.sourceName, payload.tags, payload.knowledgeBase),
-    onSuccess: (_, payload) => {
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-      queryClient.invalidateQueries({ queryKey: ["jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
-      setFile(null);
-      setSourceName("");
-      setTagsText("");
-      setKnowledgeBase(payload.knowledgeBase);
-      navigate(`/dataset/${encodeURIComponent(payload.knowledgeBase)}`);
-    }
   });
 
   const createKnowledgeBaseMutation = useMutation({
@@ -242,7 +239,8 @@ export function DocumentsPage() {
   });
 
   const indexMutation = useMutation({
-    mutationFn: indexDocument,
+    mutationFn: ({ documentId, delimiters }: { documentId: string; delimiters?: string[] }) =>
+      indexDocument(documentId, delimiters),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
@@ -335,7 +333,6 @@ export function DocumentsPage() {
     if (!selectedDatasetInfo) {
       return;
     }
-    setKnowledgeBase(activeKnowledgeBase || selectedDatasetInfo.name);
     setKnowledgeBaseSettings({
       profile_mode: selectedDatasetInfo.profile_mode,
       chunk_size_tokens: selectedDatasetInfo.chunk_size_tokens,
@@ -429,21 +426,55 @@ export function DocumentsPage() {
     });
   }, [chunkSearch, documentChunksQuery.data?.chunks]);
 
-  function submitUpload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!file || !knowledgeBase.trim()) {
-      return;
+  function addFilesToQueue(files: File[]) {
+    const items: UploadFileItem[] = files.map((f) => ({
+      id: `${f.name}-${f.size}-${Date.now()}-${Math.random()}`,
+      file: f,
+      status: "pending" as const,
+    }));
+    setUploadQueue((prev) => [...prev, ...items]);
+  }
+
+  function removeFromQueue(id: string) {
+    setUploadQueue((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  function closeUploadModal() {
+    if (isUploadingFiles) return;
+    setIsUploadModalOpen(false);
+    setUploadQueue([]);
+    setModalSourceName("");
+    setModalTagsText("");
+    setUploadModalError(null);
+  }
+
+  async function startModalUpload() {
+    if (isUploadingFiles) return;
+    const pending = uploadQueue.filter((f) => f.status === "pending");
+    if (!pending.length) return;
+
+    setIsUploadingFiles(true);
+    setUploadModalError(null);
+    const tags = modalTagsText.split(",").map((s) => s.trim()).filter(Boolean);
+
+    for (const item of pending) {
+      setUploadQueue((prev) => prev.map((f) => f.id === item.id ? { ...f, status: "uploading" as const } : f));
+      try {
+        await uploadDocument(item.file, modalSourceName.trim() || undefined, tags, activeKnowledgeBase || "default");
+        setUploadQueue((prev) => prev.map((f) => f.id === item.id ? { ...f, status: "done" as const } : f));
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error("Upload failed");
+        setUploadModalError(error);
+        setUploadQueue((prev) =>
+          prev.map((f) => f.id === item.id ? { ...f, status: "error" as const, error: error.message } : f)
+        );
+      }
     }
-    const tags = tagsText
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    uploadMutation.mutate({
-      file,
-      sourceName: sourceName.trim(),
-      tags,
-      knowledgeBase: knowledgeBase.trim()
-    });
+
+    setIsUploadingFiles(false);
+    queryClient.invalidateQueries({ queryKey: ["documents"] });
+    queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    queryClient.invalidateQueries({ queryKey: ["knowledge-bases"] });
   }
 
   function submitKnowledgeBaseCreate(event: FormEvent<HTMLFormElement>) {
@@ -661,36 +692,21 @@ export function DocumentsPage() {
 
           <div className="dataset-detail-grid">
             <aside className="dataset-side-rail">
-              <form className="upload-form dataset-upload-panel" onSubmit={submitUpload}>
+              <section className="subpanel dataset-upload-panel">
                 <div className="section-head-row">
                   <div>
                     <h3>{t.datasetAddDoc}</h3>
                     <p className="muted">{t.datasetAddDocHint}</p>
                   </div>
                 </div>
-                <label>
-                  <span>{t.datasetFile}</span>
-                  <input
-                    type="file"
-                    accept=".txt,.pdf,.docx"
-                    onChange={(event) => {
-                      const selected = event.target.files?.[0] ?? null;
-                      setFile(selected);
-                    }}
-                  />
-                </label>
-                <label>
-                  <span>{t.datasetSourceName}</span>
-                  <input type="text" value={sourceName} placeholder={t.datasetSourcePlaceholder} onChange={(event) => setSourceName(event.target.value)} />
-                </label>
-                <label>
-                  <span>{t.datasetTags}</span>
-                  <input type="text" value={tagsText} placeholder="gost, bends" onChange={(event) => setTagsText(event.target.value)} />
-                </label>
-                <button className="primary-action" type="submit" disabled={!file || uploadMutation.isPending}>
-                  {uploadMutation.isPending ? t.datasetUploading : t.datasetUpload}
+                <button
+                  type="button"
+                  className="primary-action dataset-upload-btn"
+                  onClick={() => setIsUploadModalOpen(true)}
+                >
+                  {t.datasetUploadDocs}
                 </button>
-              </form>
+              </section>
 
               <section className="subpanel">
                 <div className="section-head-row">
@@ -774,11 +790,25 @@ export function DocumentsPage() {
                           <span>{document.tags.length ? document.tags.join(", ") : "—"}</span>
                         </div>
                         <div className="dataset-document-actions" onClick={(event) => event.stopPropagation()}>
+                          <input
+                            type="text"
+                            className="delimiter-input"
+                            placeholder={t.datasetDelimitersPlaceholder}
+                            title={t.datasetDelimiters}
+                            value={delimiterInputs[document.document_id] ?? ""}
+                            onChange={(e) =>
+                              setDelimiterInputs((prev) => ({ ...prev, [document.document_id]: e.target.value }))
+                            }
+                          />
                           <button
                             type="button"
                             className="secondary-action"
                             disabled={indexMutation.isPending || hasRunning}
-                            onClick={() => indexMutation.mutate(document.document_id)}
+                            onClick={() => {
+                              const raw = delimiterInputs[document.document_id] ?? "";
+                              const delimiters = raw.split(",").map((s) => s.trim()).filter(Boolean);
+                              indexMutation.mutate({ documentId: document.document_id, delimiters: delimiters.length > 0 ? delimiters : undefined });
+                            }}
                           >
                             {hasRunning ? t.datasetIndexInProgress : t.datasetIndexing}
                           </button>
@@ -930,7 +960,7 @@ export function DocumentsPage() {
     documentsQuery.error ??
       jobsQuery.error ??
       knowledgeBasesQuery.error ??
-      uploadMutation.error ??
+      uploadModalError ??
       createKnowledgeBaseMutation.error ??
       renameKnowledgeBaseMutation.error ??
       deleteKnowledgeBaseMutation.error ??
@@ -1142,6 +1172,85 @@ export function DocumentsPage() {
           </section>
         </div>
       ) : null}
+
+      {isUploadModalOpen && (
+        <div className="overlay-backdrop" onClick={closeUploadModal}>
+          <section className="overlay-modal upload-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="overlay-head">
+              <div>
+                <h3>{t.datasetUploadDocs}</h3>
+                <p className="muted">{t.datasetAddDocHint}</p>
+              </div>
+              <button type="button" className="overlay-close" onClick={closeUploadModal}>×</button>
+            </div>
+
+            <div
+              className={`upload-dropzone${isDragging ? " dragging" : ""}`}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => { e.preventDefault(); setIsDragging(false); addFilesToQueue(Array.from(e.dataTransfer.files)); }}
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              <input
+                ref={uploadInputRef}
+                type="file"
+                multiple
+                accept=".txt,.pdf,.docx,.md,.markdown"
+                style={{ display: "none" }}
+                onChange={(e) => { addFilesToQueue(Array.from(e.target.files ?? [])); e.target.value = ""; }}
+              />
+              <span className="upload-dropzone-icon">⬆</span>
+              <p>{t.datasetDropFiles}</p>
+              <span className="muted" style={{ fontSize: "12px" }}>.txt · .pdf · .docx · .md</span>
+            </div>
+
+            {uploadQueue.length > 0 && (
+              <div className="upload-file-list">
+                {uploadQueue.map((item) => (
+                  <div key={item.id} className={`upload-file-item upload-file-${item.status}`}>
+                    <span className="upload-file-name">{item.file.name}</span>
+                    <span className="upload-file-size muted">{formatBytes(item.file.size)}</span>
+                    <span className="upload-file-badge">
+                      {item.status === "uploading" ? "…" : item.status === "done" ? "✓" : item.status === "error" ? "✗" : ""}
+                    </span>
+                    {item.status === "pending" && (
+                      <button type="button" className="upload-file-remove" onClick={() => removeFromQueue(item.id)}>×</button>
+                    )}
+                    {item.status === "error" && item.error && (
+                      <span className="upload-file-error muted">{item.error}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="overlay-form upload-modal-fields">
+              <label>
+                <span>{t.datasetSourceName}</span>
+                <input type="text" value={modalSourceName} placeholder={t.datasetSourcePlaceholder} onChange={(e) => setModalSourceName(e.target.value)} />
+              </label>
+              <label>
+                <span>{t.datasetTags}</span>
+                <input type="text" value={modalTagsText} placeholder="gost, bends" onChange={(e) => setModalTagsText(e.target.value)} />
+              </label>
+            </div>
+
+            <div className="overlay-actions">
+              <button type="button" className="ghost-action" onClick={closeUploadModal} disabled={isUploadingFiles}>
+                {t.datasetCancel}
+              </button>
+              <button
+                type="button"
+                className="primary-action"
+                disabled={isUploadingFiles || uploadQueue.filter((f) => f.status === "pending").length === 0}
+                onClick={startModalUpload}
+              >
+                {isUploadingFiles ? t.datasetUploading : `${t.datasetUploadAll} (${uploadQueue.filter((f) => f.status === "pending").length})`}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {selectedChunk ? (
         <div className="overlay-backdrop" onClick={() => setSelectedChunk(null)}>

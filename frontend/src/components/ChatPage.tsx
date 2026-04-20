@@ -274,11 +274,9 @@ export function ChatPage() {
         await streamChatMessage(activeSessionId, payload, {
           onDelta: (value) => setStreamText((current) => current + value),
           onCitations: (items) => setStreamCitations(items),
-          onError: (_code, _message) => {
-            setPendingUserMessage(null);
+          onError: (_code, message) => {
+            setStreamText(message || "Ошибка: не удалось получить ответ от модели.");
             setIsResponding(false);
-            setStreamText("");
-            setStreamCitations([]);
           }
         });
       }

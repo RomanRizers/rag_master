@@ -56,6 +56,8 @@ class _OpenAICompatibleProvider(LLMProvider):
     ):
         req = self._build_request(messages, temperature=temperature, max_tokens=max_tokens, stream=True)
         logger.info("llm_stream_started", endpoint=req.full_url, model=self.model)
+        yielded = 0
+        last_raw_lines: list[str] = []
         try:
             with request.urlopen(req, timeout=Config.LLM_REQUEST_TIMEOUT_SECONDS) as response:
                 for raw_line in response:
@@ -65,6 +67,7 @@ class _OpenAICompatibleProvider(LLMProvider):
                     payload = line[5:].strip()
                     if payload == "[DONE]":
                         break
+                    last_raw_lines = (last_raw_lines + [payload])[-5:]
                     try:
                         data = json.loads(payload)
                     except json.JSONDecodeError:
@@ -72,11 +75,32 @@ class _OpenAICompatibleProvider(LLMProvider):
 
                     delta = _extract_delta_content(data)
                     if delta:
+                        yielded += 1
                         yield delta
         except Exception as exc:
             self._raise_as_llm_error(exc)
         finally:
-            logger.info("llm_stream_finished", model=self.model)
+            logger.info("llm_stream_finished", model=self.model, chunks_yielded=yielded)
+
+        # Fallback: if stream produced no content, try non-streaming call
+        if yielded == 0:
+            logger.warning(
+                "llm_stream_empty_fallback",
+                model=self.model,
+                last_raw_lines=last_raw_lines,
+            )
+            try:
+                content = self.generate(messages, temperature=temperature, max_tokens=max_tokens)
+                if content:
+                    yield content
+                    return
+            except Exception as exc:
+                logger.error("llm_stream_fallback_failed", model=self.model, error=str(exc))
+            raise LLMError(
+                message="Языковая модель вернула пустой ответ. Попробуйте ещё раз или смените модель.",
+                code="llm_empty_response",
+                status_code=502,
+            )
 
     def _build_request(
         self,
