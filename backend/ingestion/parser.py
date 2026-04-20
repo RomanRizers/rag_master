@@ -9,23 +9,48 @@ from xml.etree import ElementTree as ET
 from backend.core.exceptions import ParsingError
 from backend.ingestion.file_types import (
     DOCX_MIME_TYPES,
+    MARKDOWN_MIME_TYPES,
     PDF_MIME_TYPES,
     TEXT_MIME_TYPES,
     normalize_mime_type,
 )
 
 
-def parse_document(file_name: str, mime_type: str, content: bytes) -> list[dict[str, Any]]:
+def parse_document(
+    file_name: str,
+    mime_type: str,
+    content: bytes,
+    delimiters: list[str] | None = None,
+) -> list[dict[str, Any]]:
     mime = normalize_mime_type(mime_type)
     if not content:
         raise ParsingError(message="Uploaded file is empty", code="empty_file")
 
-    if mime in TEXT_MIME_TYPES or file_name.lower().endswith(".txt"):
-        text = _normalize_text(content.decode("utf-8", errors="replace"))
-        return _ensure_non_empty(
-            [
+    lower_name = file_name.lower()
+
+    if mime in MARKDOWN_MIME_TYPES or lower_name.endswith(".md") or lower_name.endswith(".markdown"):
+        return _parse_markdown(content, delimiters=delimiters)
+
+    if mime in TEXT_MIME_TYPES or lower_name.endswith(".txt"):
+        raw = content.decode("utf-8", errors="replace")
+        if delimiters:
+            segments = _split_by_delimiters(raw, delimiters)
+            blocks = [
                 {
-                    "text": text,
+                    "text": _normalize_text(seg),
+                    "page": None,
+                    "section": None,
+                    "block_type": "paragraph",
+                    "heading_level": None,
+                    "heading_path": [],
+                    "is_table_like": False,
+                }
+                for seg in segments
+            ]
+        else:
+            blocks = [
+                {
+                    "text": _normalize_text(raw),
                     "page": None,
                     "section": None,
                     "block_type": "paragraph",
@@ -34,12 +59,12 @@ def parse_document(file_name: str, mime_type: str, content: bytes) -> list[dict[
                     "is_table_like": False,
                 }
             ]
-        )
+        return _ensure_non_empty(blocks)
 
-    if mime in DOCX_MIME_TYPES or file_name.lower().endswith(".docx"):
+    if mime in DOCX_MIME_TYPES or lower_name.endswith(".docx"):
         return _parse_docx(content)
 
-    if mime in PDF_MIME_TYPES or file_name.lower().endswith(".pdf"):
+    if mime in PDF_MIME_TYPES or lower_name.endswith(".pdf"):
         return _parse_pdf(content)
 
     raise ParsingError(
@@ -236,3 +261,172 @@ def _looks_table_like(text: str) -> bool:
     separators = text.count("|") + text.count(";") + text.count("\t")
     digit_ratio = sum(char.isdigit() for char in text) / max(len(text), 1)
     return separators >= 3 or digit_ratio > 0.2
+
+
+def _split_by_delimiters(text: str, delimiters: list[str]) -> list[str]:
+    pattern = "|".join(re.escape(d) for d in sorted(delimiters, key=len, reverse=True))
+    segments = re.split(pattern, text)
+    return [seg.strip() for seg in segments if seg.strip()]
+
+
+def _parse_markdown(content: bytes, delimiters: list[str] | None = None) -> list[dict[str, Any]]:
+    text = content.decode("utf-8", errors="replace")
+    segments = _split_by_delimiters(text, delimiters) if delimiters else [text]
+    blocks: list[dict[str, Any]] = []
+    for segment in segments:
+        blocks.extend(_parse_markdown_segment(segment))
+    return _ensure_non_empty(blocks)
+
+
+_TABLE_ROWS_PER_CHUNK = 10  # header + this many data rows per table chunk
+
+
+def _parse_markdown_segment(text: str) -> list[dict[str, Any]]:
+    lines = text.splitlines()
+    blocks: list[dict[str, Any]] = []
+    heading_stack: list[str] = []
+    current_section: str | None = None
+    paragraph_buffer: list[str] = []
+    table_buffer: list[str] = []  # raw pipe-table lines
+    in_code_block = False
+
+    def flush_paragraph() -> None:
+        nonlocal paragraph_buffer
+        if not paragraph_buffer:
+            return
+        joined = " ".join(line for line in paragraph_buffer if line.strip())
+        text_val = _normalize_text(joined)
+        if text_val:
+            blocks.append(
+                {
+                    "text": text_val,
+                    "page": None,
+                    "section": current_section,
+                    "block_type": "paragraph",
+                    "heading_level": None,
+                    "heading_path": list(heading_stack),
+                    "is_table_like": False,
+                }
+            )
+        paragraph_buffer = []
+
+    def flush_table() -> None:
+        nonlocal table_buffer
+        if not table_buffer:
+            return
+        _emit_markdown_table(table_buffer, blocks, current_section, heading_stack)
+        table_buffer = []
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Toggle code block fence
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            flush_table()
+            in_code_block = not in_code_block
+            paragraph_buffer.append(line)
+            continue
+
+        if in_code_block:
+            paragraph_buffer.append(line)
+            continue
+
+        # ATX heading
+        heading_match = re.match(r"^(#{1,6})\s+(.*\S)", line)
+        if heading_match:
+            flush_table()
+            flush_paragraph()
+            level = len(heading_match.group(1))
+            heading_text = _normalize_text(heading_match.group(2))
+            if heading_text:
+                current_section = heading_text
+                heading_stack = heading_stack[: level - 1]
+                heading_stack.append(heading_text)
+                blocks.append(
+                    {
+                        "text": heading_text,
+                        "page": None,
+                        "section": current_section,
+                        "block_type": "heading",
+                        "heading_level": level,
+                        "heading_path": list(heading_stack),
+                        "is_table_like": False,
+                    }
+                )
+            continue
+
+        # Pipe table row
+        if _is_md_table_row(stripped):
+            flush_paragraph()
+            table_buffer.append(stripped)
+            continue
+
+        # Any other content ends an active table
+        flush_table()
+
+        if not stripped:
+            flush_paragraph()
+            continue
+
+        paragraph_buffer.append(stripped)
+
+    flush_table()
+    flush_paragraph()
+    return blocks
+
+
+def _is_md_table_row(line: str) -> bool:
+    return line.startswith("|") and line.count("|") >= 2
+
+
+def _is_md_separator_row(line: str) -> bool:
+    """Matches lines like |---|:---:|---| (GFM table separator)."""
+    content = re.sub(r"[|\-: ]", "", line)
+    return line.startswith("|") and content == ""
+
+
+def _emit_markdown_table(
+    raw_rows: list[str],
+    blocks: list[dict[str, Any]],
+    current_section: str | None,
+    heading_stack: list[str],
+) -> None:
+    """Parse a collected pipe-table and emit chunks (header + N data rows each)."""
+    # Separate header / separator / data rows
+    non_sep = [r for r in raw_rows if not _is_md_separator_row(r)]
+    if not non_sep:
+        return
+
+    header_row = non_sep[0]
+    data_rows = non_sep[1:]
+
+    if not data_rows:
+        # Only a header — emit as-is
+        blocks.append(
+            {
+                "text": header_row,
+                "page": None,
+                "section": current_section,
+                "block_type": "table_row",
+                "heading_level": None,
+                "heading_path": list(heading_stack),
+                "is_table_like": True,
+            }
+        )
+        return
+
+    # Emit groups: header + up to _TABLE_ROWS_PER_CHUNK data rows
+    for i in range(0, len(data_rows), _TABLE_ROWS_PER_CHUNK):
+        group = data_rows[i : i + _TABLE_ROWS_PER_CHUNK]
+        table_text = "\n".join([header_row] + group)
+        blocks.append(
+            {
+                "text": table_text,
+                "page": None,
+                "section": current_section,
+                "block_type": "table_row",
+                "heading_level": None,
+                "heading_path": list(heading_stack),
+                "is_table_like": True,
+            }
+        )

@@ -90,13 +90,44 @@ def _group_blocks(prepared_blocks: list[dict[str, Any]], chunk_size_tokens: int)
         current_blocks = []
         current_tokens = []
 
+    _TABLE_ROWS_PER_GROUP = 10
+    table_header: dict[str, Any] | None = None
+    table_row_buffer: list[dict[str, Any]] = []
+
+    def flush_table_rows() -> None:
+        nonlocal table_header, table_row_buffer
+        if not table_row_buffer:
+            table_header = None
+            return
+        header = table_header
+        rows = table_row_buffer
+        for i in range(0, len(rows), _TABLE_ROWS_PER_GROUP):
+            group = rows[i : i + _TABLE_ROWS_PER_GROUP]
+            blocks_in = ([header] + group) if header else group
+            tokens = sum((b["tokens"] for b in blocks_in), [])
+            groups.append({"blocks": blocks_in, "tokens": tokens, "token_count": len(tokens)})
+        table_header = None
+        table_row_buffer = []
+
     for block in prepared_blocks:
         block_tokens = block["tokens"]
         block_type = block["block_type"]
         if block_type == "table_row":
             flush()
-            groups.append({"blocks": [block], "tokens": list(block_tokens), "token_count": len(block_tokens)})
+            # First row of a sequence becomes the header for context
+            if table_header is None:
+                table_header = block
+            else:
+                table_row_buffer.append(block)
             continue
+
+        # Any non-table block ends a table sequence
+        if table_row_buffer or table_header:
+            # If only header collected (single row), just emit it
+            if not table_row_buffer and table_header:
+                table_row_buffer.append(table_header)
+                table_header = None
+            flush_table_rows()
 
         if block_type == "heading":
             flush()
@@ -121,6 +152,7 @@ def _group_blocks(prepared_blocks: list[dict[str, Any]], chunk_size_tokens: int)
         current_blocks.append(block)
         current_tokens.extend(block_tokens)
 
+    flush_table_rows()
     flush()
     return groups
 
